@@ -31,7 +31,7 @@
   --shadow-md:  0 4px 12px rgba(0,0,0,.12);
   --shadow-lg:  0 8px 24px rgba(0,0,0,.15);
 }
-body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo',sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Meiryo',sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; height: 100vh; height: 100svh; overflow: hidden; display: flex; flex-direction: column; }
 
 /* Header */
 .app-header { height: var(--header-h); background: #2e2e2e; border-bottom: 1px solid #222; color: #f0f0f0; display: flex; align-items: center; padding: 0 20px; gap: 16px; flex-shrink: 0; z-index: 100; }
@@ -207,7 +207,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .size-ctrl button:active { transform:scale(.92); }
 .size-pct { min-width:42px; text-align:center; font-size:11px; font-weight:700; color:var(--text-sub); cursor:pointer; padding:2px 4px; border-radius:4px; transition:background .15s; }
 .size-pct:hover { background:var(--bg-raised); color:var(--primary); }
-.gantt-container { flex: 1; overflow: auto; }
+.gantt-container { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
 .gantt-inner { display: flex; min-width: 100%; }
 .gantt-task-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface); position: sticky; left: 0; z-index: 10; }
 .gantt-col-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); background: var(--bg-raised); }
@@ -411,7 +411,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 #view-schedule .page-header { transition: max-height .28s ease, padding .28s ease, opacity .2s ease, border .28s ease; max-height: 120px; overflow: hidden; }
 #view-schedule.sched-header-hidden .page-header,
 #view-schedule.sched-header-hidden .schedule-toolbar { max-height: 0; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0; border-bottom-color: transparent; }
-.schedule-container { flex: 1; overflow: auto; background: var(--bg); }
+.schedule-container { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: var(--bg); }
 .schedule-label-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 2px solid var(--border); position: sticky; left: 0; z-index: 20; background: var(--bg-surface); }
 .schedule-label-header { height: 64px; border-bottom: 1px solid var(--border); background: var(--bg-raised); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); }
 .sched-project-header { border-bottom: 2px solid var(--border); border-top: 2px solid var(--border); border-left: 5px solid transparent; display: flex; align-items: center; padding: 0 12px 0 10px; gap: 8px; height: 48px; font-size: 13px; font-weight: 700; color: var(--text); }
@@ -533,6 +533,22 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
   #view-gantt.tab-drawings #gantt-tab-drawings { display: flex; }
   /* ツールバー モバイル調整 */
   .gantt-toolbar #btn-add-photo { display: none; }
+
+  /* スケジュール表 モバイル調整 */
+  #view-schedule .page-header { display: none; }
+  #sched-legend { display: none !important; }
+  .schedule-toolbar { padding: 6px 10px; gap: 6px; max-height: 48px; }
+  .schedule-container { -webkit-overflow-scrolling: touch; }
+
+  /* 工程表 コンテナ タッチスクロール */
+  .gantt-container { -webkit-overflow-scrolling: touch; }
+
+  /* iOSでのスクロール改善 */
+  #view-gantt, #view-schedule { -webkit-overflow-scrolling: touch; }
+
+  /* スクロールバー非表示（モバイルは不要） */
+  .gantt-container::-webkit-scrollbar,
+  .schedule-container::-webkit-scrollbar { display: none; }
 }
 
 @media print {
@@ -738,7 +754,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
           </label>
         </div>
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
-          <div class="gantt-container" style="flex:1;overflow:auto">
+          <div class="gantt-container" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch">
             <div id="gantt-grid" style="display:grid;min-width:max-content"></div>
           </div>
           <aside class="task-detail-panel hidden" id="task-detail-panel">
@@ -822,7 +838,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
           <button class="zoom-btn" data-sscale="week">週</button>
           <button class="zoom-btn" data-sscale="quarter">全体</button>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-500)">
+        <div id="sched-legend" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--gray-500)">
           <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#16a34a;display:inline-block"></span>完了</span>
           <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#2563eb;display:inline-block"></span>進行中</span>
           <span style="display:inline-flex;align-items:center;gap:4px"><span style="width:10px;height:10px;border-radius:2px;background:#94a3b8;display:inline-block"></span>未着手</span>
@@ -1172,7 +1188,8 @@ function saveData(d) { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
 
 // ===== State =====
 var data = loadData();
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:1, schedZoom:1, historyYear:null };
+var isMobileDevice = window.innerWidth <= 768;
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -2369,6 +2386,9 @@ function renderGantt() {
   });
 
   renderPhotoGallery();
+  // ズームを適用（モバイルで縮小表示）
+  qs('#gantt-grid').style.zoom = state.ganttZoom;
+  qs('#gantt-zoom-pct').textContent = Math.round(state.ganttZoom*100)+'%';
 }
 
 function selectTask(id) {
@@ -2560,6 +2580,9 @@ function renderSchedule() {
   var labelBody={innerHTML:''};
   var body={innerHTML:''};
   void monthRow; void dayRow; void labelBody; void body;
+  // ズームを適用（モバイルで縮小表示）
+  qs('#sched-grid').style.zoom = state.schedZoom;
+  qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
 }
 
 function _renderSchedule_OLD_UNUSED() {
