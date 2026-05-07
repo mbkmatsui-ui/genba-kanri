@@ -1189,7 +1189,7 @@ function qsa(sel, ctx) { return Array.from((ctx||document).querySelectorAll(sel)
 function fmt(s) { if(!s) return '-'; var p=s.split('-'); return p[0]+'/'+p[1]+'/'+p[2]; }
 function diffDays(a,b) { return Math.floor((new Date(b)-new Date(a))/86400000); }
 function addDays(s,n) { var d=new Date(s); d.setDate(d.getDate()+n); return d.toISOString().split('T')[0]; }
-function todayStr() { return new Date().toISOString().split('T')[0]; }
+function todayStr() { var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function genId(p) { return p+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 function calcProgress(pid) {
   var ts=data.tasks.filter(function(t){return t.projectId===pid;});
