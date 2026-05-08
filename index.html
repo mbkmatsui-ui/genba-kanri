@@ -3056,40 +3056,71 @@ function renderSchedule() {
     var dateBg=isToday?'background:#2563eb;color:#fff;':
       isWkend?'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';':
       'background:var(--bg-surface);color:var(--text);';
+    // 縮小時（rh が小さい）は日付と曜日を横並びにして重なりを防ぐ
+    var inlineLayout = rh < 22;
     dlbl.style.cssText='position:sticky;left:0;z-index:10;'+
       'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;'+
-      'height:'+rh+'px;box-sizing:border-box;gap:0;'+dateBg;
-    dlbl.innerHTML='<span style="font-size:'+(rh>=24?'13':'10')+'px;font-weight:700;line-height:1.2">'+parseInt(d.split('-')[2])+'</span>'+
-      (rh>=18?'<span style="font-size:9px;line-height:1">'+DOW[dow]+'</span>':'');
+      'display:flex;'+(inlineLayout?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
+      'align-items:center;justify-content:center;'+
+      'height:'+rh+'px;box-sizing:border-box;'+dateBg;
+    var dateFs = inlineLayout ? 10 : (rh>=24?13:10);
+    var dowFs  = inlineLayout ? 9  : 9;
+    dlbl.innerHTML='<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
+      '<span style="font-size:'+dowFs+'px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>';
     grid.appendChild(dlbl);
 
     // Project cells
     sortedProjects.forEach(function(proj){
-      var inRange=d>=proj.startDate&&d<=proj.endDate;
-      var isStart=d===proj.startDate;
-      var isEnd=d===proj.endDate;
+      var inRange=proj.startDate&&proj.endDate&&d>=proj.startDate&&d<=proj.endDate;
+      var isStart=proj.startDate&&d===proj.startDate;
+      var isEnd=proj.endDate&&d===proj.endDate;
       var projProg=calcProgress(proj.id);
+      var projColor=proj.color||'#888';
       var cell=document.createElement('div');
-      var cellBg=inRange?proj.color+'1a':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      var cellBg=inRange?projColor+'1a':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
-        (inRange&&isStart?'border-top:2px solid '+proj.color+';':'')+
-        (inRange&&isEnd?'border-bottom:2px solid '+proj.color+';':'');
+        (inRange&&isStart?'border-top:2px solid '+projColor+';':'')+
+        (inRange&&isEnd?'border-bottom:2px solid '+projColor+';':'');
       if(inRange){
         var fill=document.createElement('div');
         fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+projProg+'%;'+
-          'background:'+proj.color+'33;pointer-events:none;';
+          'background:'+projColor+'33;pointer-events:none;';
         cell.appendChild(fill);
         if(isStart&&rh>=18){
           var lbl=document.createElement('div');
           lbl.style.cssText='position:absolute;left:0;right:0;top:1px;font-size:8px;font-weight:700;'+
-            'color:'+proj.color+';padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
+            'color:'+projColor+';padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
             'z-index:1;text-align:center;line-height:1.2;';
           lbl.textContent='▶ 着工';
           cell.appendChild(lbl);
         }
+      }
+      // タスクの可視化：このプロジェクトのタスクで、この日付に該当するものを縦のストライプとして描画
+      var projTasks=(data.tasks||[]).filter(function(t){
+        return t.projectId===proj.id && t.startDate && t.endDate && d>=t.startDate && d<=t.endDate;
+      });
+      if (projTasks.length > 0) {
+        var stripeW = 100 / projTasks.length;
+        projTasks.forEach(function(task, idx){
+          var taskColor = task.color || projColor;
+          var stripe = document.createElement('div');
+          stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
+            'background:'+taskColor+';opacity:.55;pointer-events:none;z-index:1;'+
+            (d===task.startDate?'border-left:1.5px solid '+taskColor+';':'')+
+            (d===task.endDate?'border-right:1.5px solid '+taskColor+';':'');
+          cell.appendChild(stripe);
+          // タスク名を開始日に小さく表示（行高が十分なときのみ）
+          if (d===task.startDate && rh>=16) {
+            var tlbl = document.createElement('div');
+            tlbl.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;width:'+stripeW+'%;top:50%;transform:translateY(-50%);'+
+              'font-size:7px;font-weight:700;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.5);'+
+              'padding:0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;text-align:center;line-height:1;';
+            tlbl.textContent = task.name;
+            cell.appendChild(tlbl);
+          }
+        });
       }
       cell.addEventListener('click',function(){
         state.selectedProjectId=proj.id; navigate('gantt');
