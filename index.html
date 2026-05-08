@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuildFlow Gemba — ビルフロ現場</title>
+  <!-- Firebase SDK (v10 compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
   <style>
 /* ===== リセット・変数 ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -569,9 +573,125 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .history-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#dcfce7;color:#15803d;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-archived-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#64748b;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-empty { padding:32px;text-align:center;color:var(--text-muted);font-size:13px; }
+
+/* ===== ログイン画面 ===== */
+#login-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#2e2e2e 0%,#1a1a1a 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px; }
+#login-overlay.hidden { display:none; }
+.login-card { background:#fff;border-radius:16px;padding:40px 32px;max-width:380px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4); }
+.login-logo { width:80px;height:80px;margin:0 auto 16px;border-radius:16px;background:#2e2e2e;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:24px; }
+.login-title { font-size:22px;font-weight:800;color:#1a1a1a;margin-bottom:6px; }
+.login-subtitle { font-size:13px;color:#666;margin-bottom:28px; }
+.login-google-btn { width:100%;padding:12px 16px;border:1.5px solid #dadce0;border-radius:8px;background:#fff;color:#3c4043;font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:all .15s; }
+.login-google-btn:hover { background:#f8f9fa;box-shadow:0 1px 3px rgba(0,0,0,.1); }
+.login-google-btn svg { width:18px;height:18px;flex-shrink:0; }
+.login-error { color:#b83c3c;font-size:13px;margin-top:14px;min-height:18px; }
+.login-loading { color:#666;font-size:13px;margin-top:14px; }
+
+/* ===== ヘッダーユーザー情報 ===== */
+.app-header .header-spacer { flex:1; }
+.user-info { display:flex;align-items:center;gap:8px;color:#f0f0f0;font-size:13px; }
+.user-info .user-avatar { width:32px;height:32px;border-radius:50%;background:#555;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;overflow:hidden; }
+.user-info .user-avatar img { width:100%;height:100%;object-fit:cover; }
+.user-info .user-name { white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px; }
+.user-info .user-logout { background:none;border:1px solid #555;color:#ccc;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s; }
+.user-info .user-logout:hover { background:#444;color:#fff;border-color:#777; }
+@media (max-width: 768px) {
+  .user-info .user-name { display:none; }
+  .user-info .user-logout { padding:4px 8px;font-size:10px; }
+}
+
+/* ===== 編集履歴ページ ===== */
+.audit-list { display:flex;flex-direction:column;gap:0;background:var(--bg-surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+.audit-item { display:flex;align-items:flex-start;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border-lt);background:#fff; }
+.audit-item:last-child { border-bottom:none; }
+.audit-avatar { width:32px;height:32px;border-radius:50%;background:#555;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;flex-shrink:0;overflow:hidden; }
+.audit-avatar img { width:100%;height:100%;object-fit:cover; }
+.audit-body { flex:1;min-width:0; }
+.audit-title { font-size:13px;color:var(--text);font-weight:600;line-height:1.4;word-break:break-word; }
+.audit-target { color:var(--primary);font-weight:700; }
+.audit-meta { display:flex;gap:8px;align-items:center;font-size:11px;color:var(--text-muted);margin-top:2px;flex-wrap:wrap; }
+.audit-user { font-weight:700;color:var(--text-sub); }
+.audit-action-add { color:#3a9e68; }
+.audit-action-update { color:#c08030; }
+.audit-action-delete { color:#b83c3c; }
+.audit-empty { padding:48px;text-align:center;color:var(--text-muted);font-size:13px; }
+.audit-filter-bar { display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap; }
+.audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
+.audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
+
+/* ===== オフライン表示 ===== */
+#offline-banner { position:fixed;top:0;left:0;right:0;background:#c08030;color:#fff;padding:6px 14px;text-align:center;font-size:12px;font-weight:700;z-index:998;display:none; }
+#offline-banner.show { display:block; }
+
+/* 未ログイン時はアプリ本体を隠す */
+body.not-logged-in .app-header,
+body.not-logged-in .app-body,
+body.not-logged-in #bottom-nav,
+body.not-logged-in #offline-banner { display:none !important; }
+
+/* 管理者のみ表示するナビ */
+.admin-only { display:none; }
+body.is-admin .admin-only { display:flex; }
+
+/* アクセス拒否画面 */
+#access-denied-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#2e2e2e 0%,#1a1a1a 100%);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px; }
+#access-denied-overlay.hidden { display:none; }
+.denied-card { background:#fff;border-radius:16px;padding:40px 32px;max-width:440px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.4); }
+.denied-icon { width:64px;height:64px;margin:0 auto 16px;border-radius:50%;background:#fee;color:#b83c3c;display:flex;align-items:center;justify-content:center;font-size:32px; }
+.denied-title { font-size:20px;font-weight:800;color:#1a1a1a;margin-bottom:10px; }
+.denied-msg { font-size:13px;color:#666;line-height:1.7;margin-bottom:24px; }
+.denied-email { font-weight:700;color:#1a1a1a; }
+.denied-logout-btn { padding:10px 20px;border:1.5px solid #ddd;border-radius:8px;background:#fff;color:#333;font-size:14px;font-weight:600;cursor:pointer; }
+.denied-logout-btn:hover { background:#f5f5f5; }
+
+/* メンバー管理 */
+.member-list { background:#fff;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden; }
+.member-item { display:flex;align-items:center;gap:12px;padding:12px 14px;border-bottom:1px solid var(--border-lt); }
+.member-item:last-child { border-bottom:none; }
+.member-email { flex:1;font-size:14px;color:var(--text);font-weight:600;word-break:break-all; }
+.member-badge { font-size:10px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#15803d;font-weight:700; }
+.member-admin-badge { background:#ddd6fe;color:#5b21b6; }
+.member-remove-btn { background:none;border:1px solid var(--border);color:var(--danger);padding:5px 12px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600; }
+.member-remove-btn:hover { background:#fee;border-color:var(--danger); }
+.member-add-bar { display:flex;gap:8px;margin-bottom:14px; }
+.member-add-bar input { flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:6px;font-size:14px;font-family:inherit; }
+.member-add-bar button { padding:9px 18px;background:var(--primary);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer; }
+.member-add-bar button:hover { background:var(--primary-lt); }
+.member-empty { padding:24px;text-align:center;color:var(--text-muted);font-size:13px; }
   </style>
 </head>
-<body>
+<body class="not-logged-in">
+
+<!-- ログイン画面 -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-logo">現場</div>
+    <div class="login-title">BuildFlow Gemba</div>
+    <div class="login-subtitle">Google アカウントでログインしてください</div>
+    <button id="login-google-btn" class="login-google-btn">
+      <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/></svg>
+      Google でログイン
+    </button>
+    <div id="login-error" class="login-error"></div>
+    <div id="login-loading" class="login-loading" style="display:none">読み込み中…</div>
+  </div>
+</div>
+
+<!-- アクセス拒否画面 -->
+<div id="access-denied-overlay" class="hidden">
+  <div class="denied-card">
+    <div class="denied-icon">🚫</div>
+    <div class="denied-title">アクセス権がありません</div>
+    <div class="denied-msg">
+      <span class="denied-email" id="denied-email"></span> はメンバーに登録されていません。<br>
+      管理者（<span class="denied-email">mbk.matsui@gmail.com</span>）に依頼してメンバー登録してもらってください。
+    </div>
+    <button class="denied-logout-btn" id="denied-logout-btn">別のアカウントでログイン</button>
+  </div>
+</div>
+
+<!-- オフライン通知 -->
+<div id="offline-banner">⚠️ オフライン中 — 他のメンバーへの変更は接続復旧後に反映されます</div>
 
 <header class="app-header">
   <button id="hamburger-btn" style="display:none;background:none;border:none;color:#f0f0f0;cursor:pointer;padding:6px;flex-shrink:0;line-height:0">
@@ -579,6 +699,12 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
   </button>
   <div class="logo" style="gap:8px"><img src="data:image/png;base64,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" alt="BuildFlow Gemba" style="height:40px;width:auto;object-fit:contain;display:block"><span id="company-name-header" style="font-size:13px;font-weight:700;color:#fff;white-space:nowrap;display:none;margin-left:4px"></span></div>
   <div id="header-view-label" style="display:none"></div>
+  <div class="header-spacer"></div>
+  <div class="user-info" id="user-info" style="display:none">
+    <div class="user-avatar" id="user-avatar"></div>
+    <span class="user-name" id="user-name"></span>
+    <button class="user-logout" id="user-logout-btn" title="ログアウト">ログアウト</button>
+  </div>
 </header>
 <div id="sidebar-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:199"></div>
 
@@ -605,6 +731,14 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
       <a data-view="history">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>
         完了履歴
+      </a>
+      <a data-view="audit">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        編集履歴
+      </a>
+      <a data-view="members" class="admin-only">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11l-3-3m0 0l-3 3m3-3v6"/></svg>
+        メンバー管理
       </a>
       <div class="sidebar-section-title" style="margin-top:8px">工事案件</div>
       <div id="sidebar-project-list"></div>
@@ -930,6 +1064,56 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
       </div>
     </section>
 
+    <!-- 編集履歴 -->
+    <section id="view-audit" class="view">
+      <div class="page-header">
+        <div>
+          <h2>編集履歴</h2>
+          <div class="page-subtitle">誰が・いつ・何を変更したかを確認できます</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost btn-sm" id="btn-clear-audit-old" title="30日より古いログを削除">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+            古いログを削除
+          </button>
+        </div>
+      </div>
+      <div class="clients-scroll" style="padding:0 16px 24px">
+        <div class="audit-filter-bar">
+          <button class="audit-filter-btn active" data-audit-filter="all">すべて</button>
+          <button class="audit-filter-btn" data-audit-filter="project">工事案件</button>
+          <button class="audit-filter-btn" data-audit-filter="task">タスク</button>
+          <button class="audit-filter-btn" data-audit-filter="client">発注者</button>
+          <button class="audit-filter-btn" data-audit-filter="photo">写真</button>
+          <button class="audit-filter-btn" data-audit-filter="education">作業員人数</button>
+          <button class="audit-filter-btn" data-audit-filter="settings">設定</button>
+          <button class="audit-filter-btn admin-only" data-audit-filter="member">メンバー</button>
+        </div>
+        <div id="audit-list" class="audit-list"></div>
+      </div>
+    </section>
+
+    <!-- メンバー管理（管理者のみ） -->
+    <section id="view-members" class="view">
+      <div class="page-header">
+        <div>
+          <h2>メンバー管理</h2>
+          <div class="page-subtitle">アプリにアクセスできるメンバーのメールアドレスを管理します（管理者のみ）</div>
+        </div>
+      </div>
+      <div class="clients-scroll" style="padding:0 16px 24px">
+        <div class="member-add-bar">
+          <input type="email" id="member-add-input" placeholder="例: tanaka@gmail.com" />
+          <button id="member-add-btn">メンバー追加</button>
+        </div>
+        <div id="member-list" class="member-list"></div>
+        <p style="font-size:12px;color:var(--text-muted);margin-top:14px;line-height:1.7">
+          ※ 追加されたメンバーは Google アカウント（同じメール）でログインすると自動でアクセス可能になります。<br>
+          ※ メンバー削除後、相手側でリロードすると次回アクセス時に拒否されます。
+        </p>
+      </div>
+    </section>
+
   </main>
 </div>
 
@@ -1114,6 +1298,39 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 <div class="toast-container" id="toast-container"></div>
 
 <script>
+// ===== Firebase 設定 =====
+var firebaseConfig = {
+  apiKey: "AIzaSyDeG2WPHnotn7NTGubaemGxilbtI9YtEAE",
+  authDomain: "genba-kanri-963a8.firebaseapp.com",
+  databaseURL: "https://genba-kanri-963a8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "genba-kanri-963a8",
+  storageBucket: "genba-kanri-963a8.firebasestorage.app",
+  messagingSenderId: "3828255104",
+  appId: "1:3828255104:web:ea0a05e38c8cd9673e5965",
+  measurementId: "G-VM53Y8MYJG"
+};
+
+// Firebase 初期化
+firebase.initializeApp(firebaseConfig);
+var fbAuth = firebase.auth();
+var fbDb = firebase.database();
+
+// 管理者メール（このメールはルールで常に許可される）
+var ADMIN_EMAIL = 'mbk.matsui@gmail.com';
+// メールアドレスをDBキーへエンコード（'.' は使えないため）
+function encodeEmail(em) { return String(em||'').toLowerCase().replace(/\./g, '_DOT_'); }
+function decodeEmail(k)  { return String(k||'').replace(/_DOT_/g, '.'); }
+// オフライン対応：可能ならローカルキャッシュを永続化
+try { fbDb.ref('.info/connected').on('value', function(s){
+  var on = s.val();
+  var bn = document.getElementById('offline-banner');
+  if (bn) bn.classList.toggle('show', on === false);
+}); } catch(e) {}
+
+var currentUser = null;        // ログイン中のユーザー
+var _suppressAuditNext = false; // 自動同期で更新したときは監査ログを生成しない
+var _firstDataSync = true;     // 初回データ受信フラグ
+
 // ===== データ =====
 var DB_KEY = 'genba_kanri_v2';
 var DEFAULT_DATA = {
@@ -1131,13 +1348,35 @@ var DEFAULT_DATA = {
 var SAMPLE_SENTINEL_CLIENT_ID = 'c1';
 var SAMPLE_SENTINEL_CLIENT_NAME = '山田建設株式会社';
 
+function ensureDataDefaults(d) {
+  if (!d.clients) d.clients = [];
+  if (!d.education) d.education = [];
+  if (!d.archivedProjects) d.archivedProjects = [];
+  if (!d.photos) d.photos = [];
+  if (!d.drawings) d.drawings = [];
+  if (!d.settings) d.settings = { companyName: '' };
+  if (d.settings.companyName===undefined) d.settings.companyName='';
+  if (!d.tasks) d.tasks = [];
+  if (!d.projects) d.projects = [];
+  d.tasks.forEach(function(t){
+    if(t.materialOrdered===undefined) t.materialOrdered=false;
+    if(t.workCompleted===undefined) t.workCompleted=false;
+    if(t.completionNote===undefined) t.completionNote='';
+    if(t.manager===undefined) t.manager='';
+    if(t.supervisor===undefined) t.supervisor='';
+  });
+  d.projects.forEach(function(p){
+    if(p.category===undefined) p.category='';
+  });
+  return d;
+}
+
 function loadData() {
-  // Try to migrate from older key names
+  // 起動時はローカルキャッシュから即座に表示（クラウド同期は後で）
   var LEGACY_KEYS = ['genba_kanri_v1', 'genba_kanri'];
   var r = null;
   try { r = localStorage.getItem(DB_KEY); } catch(e) {}
   if (!r) {
-    // Check legacy keys
     for (var ki=0; ki<LEGACY_KEYS.length; ki++) {
       try { var lr = localStorage.getItem(LEGACY_KEYS[ki]); if (lr) { r = lr; break; } } catch(e) {}
     }
@@ -1145,7 +1384,6 @@ function loadData() {
   if (r) {
     try {
       var d = JSON.parse(r);
-      // ★ 旧サンプルデータが残っていたら空データにリセット
       var hasSample = d.clients && d.clients.some(function(c){
         return c.id===SAMPLE_SENTINEL_CLIENT_ID && c.name===SAMPLE_SENTINEL_CLIENT_NAME;
       });
@@ -1153,38 +1391,177 @@ function loadData() {
         var settings = (d.settings && d.settings.companyName!==undefined) ? d.settings : { companyName: '' };
         var fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
         fresh.settings = settings;
-        saveData(fresh); return fresh;
+        try { localStorage.setItem(DB_KEY, JSON.stringify(fresh)); } catch(e) {}
+        return fresh;
       }
-      if (!d.clients) d.clients = [];
-      if (!d.education) d.education = [];
-      if (!d.archivedProjects) d.archivedProjects = [];
-      if (!d.photos) d.photos = [];
-      if (!d.drawings) d.drawings = [];
-      if (!d.settings) d.settings = { companyName: '' };
-      if (d.settings.companyName===undefined) d.settings.companyName='';
-      if (!d.tasks) d.tasks = [];
-      if (!d.projects) d.projects = [];
-      d.tasks.forEach(function(t){
-        if(t.materialOrdered===undefined) t.materialOrdered=false;
-        if(t.workCompleted===undefined) t.workCompleted=false;
-        if(t.completionNote===undefined) t.completionNote='';
-        if(t.manager===undefined) t.manager='';
-        if(t.supervisor===undefined) t.supervisor='';
-      });
-      d.projects.forEach(function(p){
-        if(p.category===undefined) p.category='';
-      });
-      saveData(d); return d;
+      ensureDataDefaults(d);
+      try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
+      return d;
     } catch(e) {
       console.error('データ読み込みエラー:', e);
-      return JSON.parse(JSON.stringify(DEFAULT_DATA)); // don't overwrite corrupt data
+      return JSON.parse(JSON.stringify(DEFAULT_DATA));
     }
   }
-  // First run - no saved data exists
   var d = JSON.parse(JSON.stringify(DEFAULT_DATA));
-  saveData(d); return d;
+  try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
+  return d;
 }
-function saveData(d) { localStorage.setItem(DB_KEY, JSON.stringify(d)); }
+// 直前のデータ（差分検出用）
+var _prevDataSnapshot = null;
+
+function saveData(d) {
+  // ローカル保存（オフラインでも即座に反映）
+  try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
+
+  // 監査ログ計算（自動同期で書き換えた直後はスキップ）
+  if (!_suppressAuditNext && currentUser && _prevDataSnapshot) {
+    try {
+      var changes = computeAuditChanges(_prevDataSnapshot, d);
+      if (changes.length > 0) {
+        // 一括書き込み
+        var updates = {};
+        changes.forEach(function(c){
+          var key = fbDb.ref('audit_logs').push().key;
+          updates['audit_logs/' + key] = c;
+        });
+        fbDb.ref().update(updates).catch(function(err){ console.warn('audit log write failed:', err); });
+      }
+    } catch(e) { console.warn('audit log compute failed:', e); }
+  }
+  _suppressAuditNext = false;
+  _prevDataSnapshot = JSON.parse(JSON.stringify(d));
+
+  // Firebase に書き込み（ログイン中のみ）
+  if (currentUser) {
+    fbDb.ref('data').set(d).catch(function(err){ console.warn('cloud save failed:', err); });
+  }
+}
+
+// ===== 監査ログ（編集履歴） =====
+function makeAuditEntry(action, category, target, details) {
+  return {
+    ts: firebase.database.ServerValue.TIMESTAMP,
+    tsLocal: Date.now(),
+    user: currentUser ? (currentUser.email || '') : '',
+    name: currentUser ? (currentUser.displayName || currentUser.email || '') : '',
+    photoURL: currentUser ? (currentUser.photoURL || '') : '',
+    uid: currentUser ? currentUser.uid : '',
+    action: action,        // 'add' / 'update' / 'delete'
+    category: category,    // 'project' / 'task' / 'client' / 'photo' / 'education' / 'settings'
+    target: target || '',  // 対象名
+    details: details || ''
+  };
+}
+
+// 旧データと新データを比較し、変更点をまとめて返す
+function computeAuditChanges(oldD, newD) {
+  var changes = [];
+  function indexBy(arr, key) {
+    var o = {};
+    (arr||[]).forEach(function(x){ if(x && x[key]!=null) o[x[key]] = x; });
+    return o;
+  }
+  // 工事案件
+  var oldP = indexBy(oldD.projects, 'id');
+  var newP = indexBy(newD.projects, 'id');
+  Object.keys(newP).forEach(function(id){
+    if (!oldP[id]) changes.push(makeAuditEntry('add', 'project', newP[id].name || '無題', '新しい工事案件を追加'));
+    else if (JSON.stringify(oldP[id]) !== JSON.stringify(newP[id])) {
+      var diff = describeProjectDiff(oldP[id], newP[id]);
+      changes.push(makeAuditEntry('update', 'project', newP[id].name || '無題', diff));
+    }
+  });
+  Object.keys(oldP).forEach(function(id){
+    if (!newP[id]) changes.push(makeAuditEntry('delete', 'project', oldP[id].name || '無題', '工事案件を削除'));
+  });
+
+  // タスク
+  var oldT = indexBy(oldD.tasks, 'id');
+  var newT = indexBy(newD.tasks, 'id');
+  Object.keys(newT).forEach(function(id){
+    if (!oldT[id]) {
+      var pname = (newP[newT[id].projectId]||{}).name || '';
+      changes.push(makeAuditEntry('add', 'task', newT[id].name || '無題', pname ? '工事「'+pname+'」に追加' : 'タスクを追加'));
+    } else if (JSON.stringify(oldT[id]) !== JSON.stringify(newT[id])) {
+      var diff = describeTaskDiff(oldT[id], newT[id]);
+      changes.push(makeAuditEntry('update', 'task', newT[id].name || '無題', diff));
+    }
+  });
+  Object.keys(oldT).forEach(function(id){
+    if (!newT[id]) changes.push(makeAuditEntry('delete', 'task', oldT[id].name || '無題', 'タスクを削除'));
+  });
+
+  // 発注者
+  var oldC = indexBy(oldD.clients, 'id');
+  var newC = indexBy(newD.clients, 'id');
+  Object.keys(newC).forEach(function(id){
+    if (!oldC[id]) changes.push(makeAuditEntry('add', 'client', newC[id].name || '無題', '発注者を追加'));
+    else if (JSON.stringify(oldC[id]) !== JSON.stringify(newC[id])) changes.push(makeAuditEntry('update', 'client', newC[id].name || '無題', '発注者情報を更新'));
+  });
+  Object.keys(oldC).forEach(function(id){
+    if (!newC[id]) changes.push(makeAuditEntry('delete', 'client', oldC[id].name || '無題', '発注者を削除'));
+  });
+
+  // 写真
+  var oldPh = (oldD.photos||[]).length;
+  var newPh = (newD.photos||[]).length;
+  if (newPh > oldPh) changes.push(makeAuditEntry('add', 'photo', '写真', (newPh - oldPh) + '枚を追加'));
+  else if (oldPh > newPh) changes.push(makeAuditEntry('delete', 'photo', '写真', (oldPh - newPh) + '枚を削除'));
+
+  // 作業員人数（education）
+  var oldE = indexBy(oldD.education, 'taskId');
+  var newE = (newD.education||[]);
+  newE.forEach(function(rec){
+    var tname = (newT[rec.taskId]||{}).name || '';
+    var key = rec.taskId + '_' + rec.date;
+    var oldRec = (oldD.education||[]).find(function(e){ return e.taskId===rec.taskId && e.date===rec.date; });
+    if (!oldRec) {
+      changes.push(makeAuditEntry('add', 'education', tname, rec.date+' の作業員 '+rec.count+' 人を登録'));
+    } else if (oldRec.count !== rec.count) {
+      changes.push(makeAuditEntry('update', 'education', tname, rec.date+' の作業員 '+oldRec.count+' → '+rec.count+' 人'));
+    }
+  });
+
+  // 設定（会社名）
+  var oldName = ((oldD.settings||{}).companyName) || '';
+  var newName = ((newD.settings||{}).companyName) || '';
+  if (oldName !== newName) {
+    changes.push(makeAuditEntry('update', 'settings', '会社名', '「'+oldName+'」 → 「'+newName+'」'));
+  }
+
+  // アーカイブ（完了一覧）
+  var oldArch = (oldD.archivedProjects||[]).length;
+  var newArch = (newD.archivedProjects||[]).length;
+  if (newArch > oldArch) changes.push(makeAuditEntry('add', 'project', '完了履歴', (newArch - oldArch) + '件をアーカイブ'));
+
+  return changes;
+}
+
+function describeProjectDiff(o, n) {
+  var diffs = [];
+  if (o.name !== n.name) diffs.push('名称');
+  if (o.status !== n.status) diffs.push('ステータス: '+(o.status||'-')+'→'+(n.status||'-'));
+  if (o.startDate !== n.startDate) diffs.push('着工日: '+(o.startDate||'-')+'→'+(n.startDate||'-'));
+  if (o.endDate !== n.endDate) diffs.push('竣工日: '+(o.endDate||'-')+'→'+(n.endDate||'-'));
+  if (o.location !== n.location) diffs.push('所在地');
+  if (o.assignee !== n.assignee) diffs.push('担当者');
+  if ((o.client||'') !== (n.client||'')) diffs.push('発注者');
+  if ((o.note||'') !== (n.note||'')) diffs.push('メモ');
+  return diffs.length ? diffs.join('、')+' を更新' : '工事案件を更新';
+}
+function describeTaskDiff(o, n) {
+  var diffs = [];
+  if (o.name !== n.name) diffs.push('名称');
+  if (o.status !== n.status) diffs.push('ステータス: '+(o.status||'-')+'→'+(n.status||'-'));
+  if (o.startDate !== n.startDate) diffs.push('開始: '+(o.startDate||'-')+'→'+(n.startDate||'-'));
+  if (o.endDate !== n.endDate) diffs.push('終了: '+(o.endDate||'-')+'→'+(n.endDate||'-'));
+  if ((o.assignee||'') !== (n.assignee||'')) diffs.push('担当者');
+  if ((o.manager||'') !== (n.manager||'')) diffs.push('管理者');
+  if ((o.supervisor||'') !== (n.supervisor||'')) diffs.push('現場主任');
+  if (!!o.materialOrdered !== !!n.materialOrdered) diffs.push(n.materialOrdered ? '材料発注: 済' : '材料発注: 未');
+  if (!!o.workCompleted !== !!n.workCompleted) diffs.push(n.workCompleted ? '作業完了' : '完了取消');
+  return diffs.length ? diffs.join('、')+' を更新' : 'タスクを更新';
+}
 
 // ===== State =====
 var data = loadData();
@@ -1235,6 +1612,148 @@ function navigate(view, pid) {
   if(view==='clients') renderClients();
   if(view==='schedule') renderSchedule();
   if(view==='history') renderHistory();
+  if(view==='audit') renderAudit();
+  if(view==='members') renderMembers();
+}
+
+// ===== メンバー管理 =====
+var _membersCache = []; // [{email, key}]
+
+function subscribeMembers() {
+  if (!currentUser) return;
+  if (currentUser.email !== ADMIN_EMAIL) return; // 管理者のみ
+  fbDb.ref('allowed_emails').on('value', function(snap){
+    var arr = [];
+    snap.forEach(function(c){
+      var k = c.key;
+      var v = c.val();
+      if (v) arr.push({ email: decodeEmail(k), key: k });
+    });
+    arr.sort(function(a,b){ return a.email.localeCompare(b.email); });
+    _membersCache = arr;
+    if (state.view === 'members') renderMembers();
+  });
+}
+
+function renderMembers() {
+  var list = qs('#member-list');
+  if (!list) return;
+  // 管理者を最初に表示
+  var html = '<div class="member-item">'+
+    '<span class="member-email">'+escapeHtml(ADMIN_EMAIL)+'</span>'+
+    '<span class="member-badge member-admin-badge">管理者</span>'+
+  '</div>';
+  if (!_membersCache.length) {
+    html += '<div class="member-empty">他のメンバーはまだ登録されていません</div>';
+  } else {
+    html += _membersCache.map(function(m){
+      // 管理者のメールが allowed_emails にも入っている場合は表示しない（重複回避）
+      if (m.email === ADMIN_EMAIL) return '';
+      return '<div class="member-item">'+
+        '<span class="member-email">'+escapeHtml(m.email)+'</span>'+
+        '<span class="member-badge">メンバー</span>'+
+        '<button class="member-remove-btn" data-key="'+escapeHtml(m.key)+'" data-email="'+escapeHtml(m.email)+'">削除</button>'+
+      '</div>';
+    }).join('');
+  }
+  list.innerHTML = html;
+  // 削除ボタン
+  qsa('.member-remove-btn', list).forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var em = btn.dataset.email;
+      if (!confirm(em + ' をメンバーから削除しますか？')) return;
+      fbDb.ref('allowed_emails/'+btn.dataset.key).remove().then(function(){
+        // 監査ログ
+        var entry = makeAuditEntry('delete', 'member', em, 'メンバーを削除');
+        fbDb.ref('audit_logs').push(entry);
+      }).catch(function(err){ alert('削除失敗: '+err.message); });
+    });
+  });
+}
+
+function addAllowedEmail(email) {
+  email = String(email||'').trim().toLowerCase();
+  if (!email || email.indexOf('@') < 0) { alert('正しいメールアドレスを入力してください'); return; }
+  if (email === ADMIN_EMAIL) { alert('管理者は既にアクセス可能です'); return; }
+  var key = encodeEmail(email);
+  fbDb.ref('allowed_emails/'+key).set(true).then(function(){
+    // 監査ログ
+    var entry = makeAuditEntry('add', 'member', email, 'メンバーを追加');
+    fbDb.ref('audit_logs').push(entry);
+    qs('#member-add-input').value = '';
+  }).catch(function(err){ alert('追加失敗: '+err.message); });
+}
+
+// ===== 編集履歴ページ =====
+var _auditCache = [];   // 取得済みの監査ログ（新しい順）
+var _auditFilter = 'all';
+
+function subscribeAudit() {
+  if (!currentUser) return;
+  // 直近 500 件を新しい順に表示
+  fbDb.ref('audit_logs').limitToLast(500).on('value', function(snap){
+    var items = [];
+    snap.forEach(function(c){ var v = c.val(); if (v) { v.__id = c.key; items.push(v); } });
+    items.sort(function(a,b){ return (b.tsLocal||0) - (a.tsLocal||0); });
+    _auditCache = items;
+    if (state.view === 'audit') renderAudit();
+  }, function(err){ console.warn('audit subscribe error:', err && err.code); });
+}
+
+function renderAudit() {
+  var list = qs('#audit-list');
+  if (!list) return;
+  qsa('.audit-filter-btn').forEach(function(b){ b.classList.toggle('active', b.dataset.auditFilter === _auditFilter); });
+  var items = _auditCache;
+  if (_auditFilter !== 'all') items = items.filter(function(x){ return x.category === _auditFilter; });
+
+  if (!items.length) {
+    list.innerHTML = '<div class="audit-empty">編集履歴はまだありません</div>';
+    return;
+  }
+  var actionLbl = { add: '追加', update: '変更', delete: '削除' };
+  var actionCls = { add: 'audit-action-add', update: 'audit-action-update', delete: 'audit-action-delete' };
+  var catLbl = { project:'工事案件', task:'タスク', client:'発注者', photo:'写真', education:'作業員人数', settings:'設定', member:'メンバー' };
+  list.innerHTML = items.map(function(it){
+    var when = formatAuditTime(it.tsLocal || it.ts);
+    var avatar = it.photoURL
+      ? '<img src="'+escapeHtml(it.photoURL)+'" alt="">'
+      : escapeHtml((it.name||it.user||'?').charAt(0).toUpperCase());
+    var act = actionLbl[it.action] || it.action || '';
+    var actCls = actionCls[it.action] || '';
+    var cat = catLbl[it.category] || it.category || '';
+    return '<div class="audit-item">'+
+      '<div class="audit-avatar">'+avatar+'</div>'+
+      '<div class="audit-body">'+
+        '<div class="audit-title"><span class="'+actCls+'">'+escapeHtml(act)+'</span> '+
+          escapeHtml(cat)+' <span class="audit-target">'+escapeHtml(it.target||'')+'</span>'+
+          (it.details ? ' — '+escapeHtml(it.details) : '')+'</div>'+
+        '<div class="audit-meta"><span class="audit-user">'+escapeHtml(it.name||it.user||'?')+'</span><span>'+when+'</span></div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function formatAuditTime(ts) {
+  if (!ts) return '';
+  var d = new Date(ts);
+  var now = new Date();
+  var diffMs = now - d;
+  var diffMin = Math.floor(diffMs/60000);
+  if (diffMin < 1) return 'たった今';
+  if (diffMin < 60) return diffMin+'分前';
+  var diffH = Math.floor(diffMin/60);
+  if (diffH < 24 && d.getDate() === now.getDate()) return diffH+'時間前';
+  var y = d.getFullYear(), m = d.getMonth()+1, day = d.getDate();
+  var hh = String(d.getHours()).padStart(2,'0'), mm = String(d.getMinutes()).padStart(2,'0');
+  if (y === now.getFullYear()) return m+'/'+day+' '+hh+':'+mm;
+  return y+'/'+m+'/'+day+' '+hh+':'+mm;
+}
+
+function escapeHtml(s) {
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  });
 }
 
 // ===== Dashboard =====
@@ -3635,6 +4154,169 @@ document.addEventListener('DOMContentLoaded', function(){
     });
     // header-view-label は非表示のため更新不要
   };
+
+  // ===== 編集履歴 ページのフィルタボタン =====
+  qsa('.audit-filter-btn').forEach(function(b){
+    b.addEventListener('click', function(){
+      _auditFilter = b.dataset.auditFilter;
+      renderAudit();
+    });
+  });
+  // 古いログを削除（30日以上前）
+  var btnClearAuditOld = qs('#btn-clear-audit-old');
+  if (btnClearAuditOld) {
+    btnClearAuditOld.addEventListener('click', function(){
+      if (!confirm('30日より古い編集履歴を削除します。よろしいですか？')) return;
+      var cutoff = Date.now() - 30*24*60*60*1000;
+      var updates = {};
+      _auditCache.forEach(function(it){
+        if ((it.tsLocal||0) < cutoff && it.__id) updates['audit_logs/'+it.__id] = null;
+      });
+      fbDb.ref().update(updates).then(function(){
+        alert('古いログを削除しました');
+      }).catch(function(err){ alert('削除失敗: '+err.message); });
+    });
+  }
+
+  // ===== Firebase 認証フロー =====
+  var loginOverlay = qs('#login-overlay');
+  var loginErrEl   = qs('#login-error');
+  var loginLoadEl  = qs('#login-loading');
+  var googleBtn    = qs('#login-google-btn');
+  var logoutBtn    = qs('#user-logout-btn');
+  var userInfoEl   = qs('#user-info');
+
+  if (googleBtn) {
+    googleBtn.addEventListener('click', function(){
+      loginErrEl.textContent = '';
+      loginLoadEl.style.display = 'block';
+      googleBtn.disabled = true;
+      var provider = new firebase.auth.GoogleAuthProvider();
+      fbAuth.signInWithPopup(provider)
+        .then(function(){ loginLoadEl.style.display='none'; googleBtn.disabled=false; })
+        .catch(function(err){
+          loginLoadEl.style.display = 'none';
+          googleBtn.disabled = false;
+          loginErrEl.textContent = err && err.message ? err.message : 'ログインに失敗しました';
+        });
+    });
+  }
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function(){
+      if (!confirm('ログアウトしますか？')) return;
+      fbAuth.signOut();
+    });
+  }
+
+  // メンバー追加ボタン
+  var memberAddBtn = qs('#member-add-btn');
+  var memberAddInput = qs('#member-add-input');
+  if (memberAddBtn) {
+    memberAddBtn.addEventListener('click', function(){ addAllowedEmail(memberAddInput.value); });
+    memberAddInput.addEventListener('keypress', function(e){ if (e.key === 'Enter') addAllowedEmail(memberAddInput.value); });
+  }
+
+  // アクセス拒否画面のログアウト
+  var deniedLogoutBtn = qs('#denied-logout-btn');
+  if (deniedLogoutBtn) {
+    deniedLogoutBtn.addEventListener('click', function(){ fbAuth.signOut(); });
+  }
+
+  function showAccessDenied(email) {
+    qs('#denied-email').textContent = email || '';
+    qs('#access-denied-overlay').classList.remove('hidden');
+    document.body.classList.add('not-logged-in');
+    userInfoEl.style.display = 'none';
+  }
+  function hideAccessDenied() {
+    qs('#access-denied-overlay').classList.add('hidden');
+  }
+
+  // 認証状態の監視
+  var _dataSubscribed = false;
+  var _auditSubscribed = false;
+  var _membersSubscribed = false;
+  fbAuth.onAuthStateChanged(function(user){
+    currentUser = user;
+    if (user) {
+      // ログイン成功（ただしメンバーかどうかはルールで判定）
+      hideAccessDenied();
+      document.body.classList.remove('not-logged-in');
+      loginOverlay.classList.add('hidden');
+      userInfoEl.style.display = 'flex';
+      qs('#user-name').textContent = user.displayName || user.email || '';
+      var av = qs('#user-avatar');
+      if (user.photoURL) av.innerHTML = '<img src="'+escapeHtml(user.photoURL)+'" alt="">';
+      else av.textContent = String((user.displayName||user.email||'?')).charAt(0).toUpperCase();
+
+      // 管理者判定
+      if (user.email === ADMIN_EMAIL) {
+        document.body.classList.add('is-admin');
+      } else {
+        document.body.classList.remove('is-admin');
+      }
+
+      // データ同期を開始（1回だけ）
+      if (!_dataSubscribed) {
+        _dataSubscribed = true;
+        _prevDataSnapshot = JSON.parse(JSON.stringify(data));
+        fbDb.ref('data').on('value', function(snap){
+          var cloud = snap.val();
+          if (cloud) {
+            // クラウドにデータがある場合：採用
+            ensureDataDefaults(cloud);
+            _suppressAuditNext = true;  // この更新は監査しない
+            data = cloud;
+            _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
+            try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
+            renderSidebarProjects && renderSidebarProjects();
+            if (state && state.view) navigate(state.view);
+            updateCompanyNameHeader && updateCompanyNameHeader();
+            _firstDataSync = false;
+          } else {
+            // クラウドが空：オプションAに従い空データから新規スタート
+            if (_firstDataSync) {
+              _firstDataSync = false;
+              var fresh = JSON.parse(JSON.stringify(DEFAULT_DATA));
+              ensureDataDefaults(fresh);
+              _suppressAuditNext = true;
+              data = fresh;
+              _prevDataSnapshot = JSON.parse(JSON.stringify(fresh));
+              try { localStorage.setItem(DB_KEY, JSON.stringify(fresh)); } catch(e) {}
+              renderSidebarProjects && renderSidebarProjects();
+              if (state && state.view) navigate(state.view);
+              updateCompanyNameHeader && updateCompanyNameHeader();
+            }
+          }
+        }, function(err){
+          // ルールで弾かれた → アクセス拒否
+          if (err && err.code === 'PERMISSION_DENIED') {
+            _dataSubscribed = false; // 後で別アカウントで再試行できるように
+            showAccessDenied(user.email);
+          } else {
+            console.warn('data sync error:', err);
+          }
+        });
+      }
+      // 監査ログ購読
+      if (!_auditSubscribed) {
+        _auditSubscribed = true;
+        subscribeAudit();
+      }
+      // メンバー一覧購読（管理者のみ）
+      if (!_membersSubscribed && user.email === ADMIN_EMAIL) {
+        _membersSubscribed = true;
+        subscribeMembers();
+      }
+    } else {
+      // 未ログイン
+      hideAccessDenied();
+      document.body.classList.remove('is-admin');
+      document.body.classList.add('not-logged-in');
+      loginOverlay.classList.remove('hidden');
+      userInfoEl.style.display = 'none';
+    }
+  });
 });
 </script>
 
