@@ -2891,17 +2891,20 @@ function renderGantt() {
       var isEnd=task.endDate&&d===task.endDate;
       var sc=statusColor(task.status);
       var cell=document.createElement('div');
-      var cellBg=inRange?sc+'1a':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 期間内セルの背景色を濃くして視認性を改善（1a→55: 33%透明度）
+      var cellBg=inRange?sc+'55':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
-        (inRange&&isStart?'border-top:2px solid '+sc+';':'')+
-        (inRange&&isEnd?'border-bottom:2px solid '+sc+';':'');
-      if(task.id===state.selectedTaskId&&inRange) cell.style.background=sc+'33';
+        (inRange&&isStart?'border-top:3px solid '+sc+';':'')+
+        (inRange&&isEnd?'border-bottom:3px solid '+sc+';':'');
+      if(task.id===state.selectedTaskId&&inRange) cell.style.background=sc+'88';
       if(inRange){
         var fill=document.createElement('div');
-        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+task.progress+'%;'+
-          'background:'+sc+'33;pointer-events:none;';
+        // 進捗バー：進捗0%でも左端に細い帯を出す（視認性のため最低3%）
+        var fillW = Math.max(task.progress||0, 0);
+        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+fillW+'%;'+
+          'background:'+sc+'66;pointer-events:none;';
         cell.appendChild(fill);
         if(isStart&&rh>=24){
           var lbl=document.createElement('div');
@@ -3090,16 +3093,17 @@ function renderSchedule() {
       var projProg=calcProgress(proj.id);
       var projColor=proj.color||'#888';
       var cell=document.createElement('div');
-      var cellBg=inRange?projColor+'1a':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 期間内セルの背景色を濃くして視認性を改善（1a→55: 33%透明度）
+      var cellBg=inRange?projColor+'55':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
-        (inRange&&isStart?'border-top:2px solid '+projColor+';':'')+
-        (inRange&&isEnd?'border-bottom:2px solid '+projColor+';':'');
+        (inRange&&isStart?'border-top:3px solid '+projColor+';':'')+
+        (inRange&&isEnd?'border-bottom:3px solid '+projColor+';':'');
       if(inRange){
         var fill=document.createElement('div');
-        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+projProg+'%;'+
-          'background:'+projColor+'33;pointer-events:none;';
+        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+(projProg||0)+'%;'+
+          'background:'+projColor+'77;pointer-events:none;';
         cell.appendChild(fill);
         if(isStart&&rh>=18){
           var lbl=document.createElement('div');
