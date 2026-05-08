@@ -2541,7 +2541,17 @@ var CELL_W = {week:28, month:22, quarter:14};
 function getRange() {
   var p=data.projects.find(function(p){return p.id===state.selectedProjectId;});
   if(!p) return {start:todayStr(), end:addDays(todayStr(),90)};
-  return {start:addDays(p.startDate,-7), end:addDays(p.endDate,14)};
+  // 案件に着工日・竣工日が無い場合はタスクの日付から推定、無ければ今日基準
+  var s = p.startDate;
+  var e = p.endDate;
+  if (!s || !e) {
+    var projTasks = (data.tasks||[]).filter(function(t){ return t.projectId===p.id; });
+    var taskStarts = projTasks.map(function(t){return t.startDate;}).filter(Boolean).sort();
+    var taskEnds   = projTasks.map(function(t){return t.endDate;}).filter(Boolean).sort();
+    if (!s) s = taskStarts.length ? taskStarts[0] : todayStr();
+    if (!e) e = taskEnds.length ? taskEnds[taskEnds.length-1] : addDays(s,90);
+  }
+  return {start:addDays(s,-7), end:addDays(e,14)};
 }
 
 function buildDays(start, end) {
@@ -2863,19 +2873,22 @@ function renderGantt() {
     var dateBg=isToday?'background:#2563eb;color:#fff;':
       isWkend?'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';':
       'background:var(--bg-surface);color:var(--text);';
+    var ganttInline = rh < 26;
     dlbl.style.cssText='position:sticky;left:0;z-index:10;'+
       'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;'+
-      'height:'+rh+'px;box-sizing:border-box;gap:0;'+dateBg;
-    dlbl.innerHTML='<span style="font-size:'+(rh>=28?'13':'10')+'px;font-weight:700;line-height:1.2">'+parseInt(d.split('-')[2])+'</span>'+
-      (rh>=22?'<span style="font-size:9px;line-height:1">'+DOW[dow]+'</span>':'');
+      'display:flex;'+(ganttInline?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
+      'align-items:center;justify-content:center;'+
+      'height:'+rh+'px;box-sizing:border-box;'+dateBg;
+    var gDateFs = ganttInline ? 10 : (rh>=28?13:10);
+    dlbl.innerHTML='<span style="font-size:'+gDateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
+      '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>';
     grid.appendChild(dlbl);
 
     // Task cells
     tasks.forEach(function(task){
-      var inRange=d>=task.startDate&&d<=task.endDate;
-      var isStart=d===task.startDate;
-      var isEnd=d===task.endDate;
+      var inRange=task.startDate&&task.endDate&&d>=task.startDate&&d<=task.endDate;
+      var isStart=task.startDate&&d===task.startDate;
+      var isEnd=task.endDate&&d===task.endDate;
       var sc=statusColor(task.status);
       var cell=document.createElement('div');
       var cellBg=inRange?sc+'1a':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
