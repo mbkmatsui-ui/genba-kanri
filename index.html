@@ -2953,10 +2953,15 @@ var schedScale = 'month';
 var SCHED_CW = {week:28, month:20, quarter:12};
 
 function schedGetRange() {
-  if(!data.projects.length) return {start:todayStr(), end:addDays(todayStr(),90)};
-  var starts = data.projects.map(function(p){return p.startDate;}).filter(Boolean).sort();
-  var ends   = data.projects.map(function(p){return p.endDate;}).filter(Boolean).sort();
-  return { start: addDays(starts[0],-7), end: addDays(ends[ends.length-1],14) };
+  var projs = data.projects || [];
+  if(!projs.length) return {start:todayStr(), end:addDays(todayStr(),90)};
+  var starts = projs.map(function(p){return p.startDate;}).filter(Boolean).sort();
+  var ends   = projs.map(function(p){return p.endDate;}).filter(Boolean).sort();
+  // 日付がまだ設定されていない場合は今日を起点にデフォルト範囲
+  if (!starts.length && !ends.length) return {start:todayStr(), end:addDays(todayStr(),90)};
+  var s = starts.length ? starts[0] : todayStr();
+  var e = ends.length ? ends[ends.length-1] : addDays(s,90);
+  return { start: addDays(s,-7), end: addDays(e,14) };
 }
 
 function renderSchedule() {
