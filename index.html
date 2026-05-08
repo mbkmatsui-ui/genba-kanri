@@ -2874,6 +2874,8 @@ function renderGantt() {
       isWkend?'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';':
       'background:var(--bg-surface);color:var(--text);';
     var ganttInline = rh < 26;
+    var effRhG = rh * (state.ganttZoom || 1);
+    var hideDowG = effRhG < 11;
     dlbl.style.cssText='position:sticky;left:0;z-index:10;'+
       'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
       'display:flex;'+(ganttInline?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
@@ -2881,7 +2883,7 @@ function renderGantt() {
       'height:'+rh+'px;box-sizing:border-box;'+dateBg;
     var gDateFs = ganttInline ? 10 : (rh>=28?13:10);
     dlbl.innerHTML='<span style="font-size:'+gDateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
-      '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>';
+      (hideDowG ? '' : '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
     grid.appendChild(dlbl);
 
     // Task cells
@@ -3074,6 +3076,9 @@ function renderSchedule() {
       'background:var(--bg-surface);color:var(--text);';
     // 縮小時（rh が小さい）は日付と曜日を横並びにして重なりを防ぐ
     var inlineLayout = rh < 22;
+    // 効果的な行高（ズーム適用後）が小さすぎる場合は曜日を非表示
+    var effRh = rh * (state.schedZoom || 1);
+    var hideDow = effRh < 11;
     dlbl.style.cssText='position:sticky;left:0;z-index:10;'+
       'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
       'display:flex;'+(inlineLayout?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
@@ -3082,7 +3087,7 @@ function renderSchedule() {
     var dateFs = inlineLayout ? 10 : (rh>=24?13:10);
     var dowFs  = inlineLayout ? 9  : 9;
     dlbl.innerHTML='<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
-      '<span style="font-size:'+dowFs+'px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>';
+      (hideDow ? '' : '<span style="font-size:'+dowFs+'px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
     grid.appendChild(dlbl);
 
     // Project cells
