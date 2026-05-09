@@ -3951,7 +3951,8 @@ function addProjTaskRow(task){
   });
   row.querySelector('.ptask-start').addEventListener('change',function(){
     var end=row.querySelector('.ptask-end');
-    if(!end.value) end.value=this.value;
+    // 終了日が空 or 開始日より前なら同じ日に自動セット
+    if (!end.value || end.value < this.value) end.value = this.value;
   });
   row.querySelector('.ptask-name-sel').addEventListener('change',function(){
     var manual=row.querySelector('.ptask-name-manual');
@@ -4221,10 +4222,11 @@ function renderSidebarProjects() {
     if(hid) hid.value=val;
     var txt=document.querySelector('.dp-trigger[data-hidden="'+curHiddenId+'"] .dp-trigger-text');
     if(txt){ txt.textContent=fmt(val); txt.classList.add('has-val'); }
-    // 開始日を選んだとき、終了日が空なら同じ日に自動セット（1日タスク用）
+    // 開始日を選んだとき、終了日が空 or 開始日より前なら同じ日に自動セット
+    //（1日タスク用、および無効な期間の防止）
     if (curPairId && /-(start)$/.test(curHiddenId)) {
       var pair = document.getElementById(curPairId);
-      if (pair && !pair.value) {
+      if (pair && (!pair.value || pair.value < val)) {
         pair.value = val;
         var pTxt = document.querySelector('.dp-trigger[data-hidden="'+curPairId+'"] .dp-trigger-text');
         if (pTxt) { pTxt.textContent = fmt(val); pTxt.classList.add('has-val'); }
