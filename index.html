@@ -99,8 +99,9 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .today-section-title { font-size: 14px; font-weight: 700; color: var(--text); }
 .today-section-date { font-size: 12px; color: var(--text-sub); margin-left: auto; }
 .today-tasks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 6px; }
-.today-task-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-raised); border: 1px solid var(--border-lt); border-left: 3px solid #999; border-radius: 6px; cursor: pointer; transition: background .12s; }
+.today-task-item { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-raised); border: 1px solid var(--border-lt); border-left: 3px solid #999; border-radius: 6px; cursor: pointer; transition: background .12s, transform .08s; -webkit-tap-highlight-color: transparent; }
 .today-task-item:hover { background: var(--bg-hover); }
+.today-task-item:active { background: var(--bg-hover); transform: scale(.985); }
 .today-task-name { font-size: 13px; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .today-task-meta { font-size: 11px; color: var(--text-sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .today-empty { text-align: center; padding: 16px; color: var(--text-muted); font-size: 13px; }
@@ -1988,9 +1989,24 @@ function renderTodaySchedule() {
   wrap.querySelectorAll('.today-task-item').forEach(function(el){
     el.addEventListener('click',function(e){
       if(e.target.closest('.worker-stepper-wrap')) return;
-      navigate('gantt',el.dataset.pid);
-      state.selectedTaskId=el.dataset.tid;
-      setTimeout(function(){ renderDetail(el.dataset.tid); },120);
+      var pid = el.dataset.pid;
+      var tid = el.dataset.tid;
+      // 順序が大事：選択タスクを先にセット → そのあと navigate して renderGantt が選択状態を反映できるように
+      state.selectedTaskId = tid;
+      state.selectedProjectId = pid;
+      navigate('gantt', pid);
+      // モバイルでは詳細パネルを少し遅らせて開く
+      setTimeout(function(){
+        try { if (typeof renderDetail === 'function') renderDetail(tid); } catch(err) { console.warn('renderDetail failed:', err); }
+        // 該当タスクのヘッダーまでスクロール
+        try {
+          var ganttGrid = qs('#gantt-grid');
+          if (ganttGrid) {
+            var taskHdrs = ganttGrid.querySelectorAll('[data-task-id="'+tid+'"]');
+            if (taskHdrs.length) taskHdrs[0].scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'});
+          }
+        } catch(err){}
+      }, 120);
     });
   });
 }
