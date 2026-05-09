@@ -308,6 +308,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .mal-badge-overdue-noted { background: #a855f7; }
 /* info */
 .material-alert-info { flex: 1; min-width: 0; }
+.mal-icon { flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.mal-icon svg { display: block; }
 .material-alert-task { font-size: 13px; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .material-alert-proj { font-size: 11px; color: #78716c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* action buttons */
@@ -2214,6 +2216,7 @@ function renderMaterialAlert() {
 
     itemsHtml += '<div class="mal-item mal-item-' + s + '">'
       + '<div class="mal-badge mal-badge-' + s + '">' + badgeText + '</div>'
+      + '<div class="mal-icon">' + getTaskIconSVG(t.name, 28) + '</div>'
       + '<div class="material-alert-info">'
       + '<div class="material-alert-task">' + t.name + '</div>'
       + '<div class="material-alert-proj" style="color:' + (proj.color||'#888') + '">' + (proj.name||'')
