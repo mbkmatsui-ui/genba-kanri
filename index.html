@@ -967,6 +967,10 @@ body.is-admin .admin-only { display:flex; }
         </div>
       </div>
       <div class="schedule-toolbar">
+        <div class="zoom-group" id="sched-mode-toggle">
+          <button class="zoom-btn active" data-smode="project">案件別</button>
+          <button class="zoom-btn" data-smode="assignee">担当者別</button>
+        </div>
         <div class="zoom-group">
           <button class="zoom-btn active" data-sscale="month">月</button>
           <button class="zoom-btn" data-sscale="week">週</button>
@@ -1592,7 +1596,7 @@ function describeTaskDiff(o, n) {
 // ===== State =====
 var data = loadData();
 var isMobileDevice = window.innerWidth <= 768;
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null };
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null, schedMode:'project' };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -3127,6 +3131,13 @@ function schedGetRange() {
 }
 
 function renderSchedule() {
+  // モード切替ボタンの状態を更新
+  qsa('#sched-mode-toggle .zoom-btn').forEach(function(b){
+    b.classList.toggle('active', b.dataset.smode === (state.schedMode||'project'));
+  });
+  if ((state.schedMode||'project') === 'assignee') {
+    return renderScheduleByAssignee();
+  }
   var range = schedGetRange();
   var days = buildDays(range.start, range.end);
   var rh = SCHED_CW[schedScale]; // row height per day
@@ -3302,6 +3313,171 @@ function renderSchedule() {
   var body={innerHTML:''};
   void monthRow; void dayRow; void labelBody; void body;
   // ズームを適用（モバイルで縮小表示）
+  qs('#sched-grid').style.zoom = state.schedZoom;
+  qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
+}
+
+// ===== 担当者別 全体スケジュール =====
+function renderScheduleByAssignee() {
+  var range = schedGetRange();
+  var days = buildDays(range.start, range.end);
+  var rh = SCHED_CW[schedScale];
+  var today = todayStr();
+  var DOW = ['日','月','火','水','木','金','土'];
+
+  // 担当者ごとにタスクをグループ化
+  var groups = {}; // assignee -> [tasks]
+  (data.tasks||[]).forEach(function(t){
+    var a = (t.assignee||'').trim();
+    if (!a) return;
+    if (!groups[a]) groups[a] = [];
+    groups[a].push(t);
+  });
+  var assignees = Object.keys(groups).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+
+  var DATE_W = 56, COL_W = 110, HDR_H = 70;
+  var grid = qs('#sched-grid'); grid.innerHTML = '';
+  grid.style.cssText = 'display:grid;grid-template-columns:'+DATE_W+'px '+
+    (assignees.length?'repeat('+assignees.length+','+COL_W+'px)':'1fr')+
+    ';min-width:max-content;';
+
+  // Corner
+  var corner = document.createElement('div');
+  corner.style.cssText = 'position:sticky;top:0;left:0;z-index:30;background:var(--bg-raised);'+
+    'border-right:2px solid var(--border);border-bottom:2px solid var(--border);'+
+    'font-size:10px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;'+
+    'justify-content:center;height:'+HDR_H+'px;box-sizing:border-box;';
+  corner.textContent = '日付';
+  grid.appendChild(corner);
+
+  // 担当者がいない場合
+  if (!assignees.length) {
+    var empty = document.createElement('div');
+    empty.style.cssText = 'grid-column:2;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
+    empty.textContent = 'タスクに担当者を設定すると、担当者別スケジュールが表示されます';
+    grid.appendChild(empty);
+    qs('#sched-grid').style.zoom = state.schedZoom;
+    qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
+    return;
+  }
+
+  // 担当者カラムヘッダー
+  assignees.forEach(function(name){
+    var taskCount = groups[name].length;
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'position:sticky;top:0;z-index:20;background:#2e2e2e;color:#fff;'+
+      'border-right:1px solid var(--border-lt);border-bottom:2px solid var(--border);'+
+      'padding:8px 6px;height:'+HDR_H+'px;box-sizing:border-box;cursor:default;'+
+      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;';
+    var nm = document.createElement('div');
+    nm.style.cssText = 'font-size:13px;font-weight:700;line-height:1.2;text-align:center;'+
+      'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;';
+    nm.textContent = name;
+    var ct = document.createElement('div');
+    ct.style.cssText = 'font-size:10px;color:#bbb;font-weight:600;';
+    ct.textContent = taskCount + ' タスク';
+    hdr.appendChild(nm); hdr.appendChild(ct);
+    grid.appendChild(hdr);
+  });
+
+  // 月見出し制御
+  var curMonth = '';
+  days.forEach(function(d){
+    var dow = new Date(d+'T00:00:00').getDay();
+    var isWkend = dow===0||dow===6;
+    var isToday = d===today;
+    var month = d.slice(0,7);
+
+    // Month separator
+    if (month !== curMonth) {
+      curMonth = month;
+      var mp = month.split('-');
+      var mlbl = document.createElement('div');
+      mlbl.style.cssText = 'position:sticky;left:0;z-index:10;background:var(--bg-raised);'+
+        'border-right:2px solid var(--border);border-bottom:1px solid var(--border);'+
+        'border-top:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text);'+
+        'padding:0 6px;display:flex;align-items:center;height:20px;white-space:nowrap;';
+      mlbl.textContent = mp[0]+'年'+parseInt(mp[1])+'月';
+      grid.appendChild(mlbl);
+      assignees.forEach(function(){
+        var mc = document.createElement('div');
+        mc.style.cssText = 'background:var(--bg-raised);border-right:1px solid var(--border-lt);'+
+          'border-bottom:1px solid var(--border);border-top:1px solid var(--border);height:20px;';
+        grid.appendChild(mc);
+      });
+    }
+
+    // Date label
+    var dlbl = document.createElement('div');
+    var dateBg = isToday ? 'background:#2563eb;color:#fff;' :
+      isWkend ? 'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';' :
+      'background:var(--bg-surface);color:var(--text);';
+    var inlineLayout = rh < 22;
+    var effRh = rh * (state.schedZoom||1);
+    var hideDow = effRh < 11;
+    dlbl.style.cssText = 'position:sticky;left:0;z-index:10;'+
+      'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
+      'display:flex;'+(inlineLayout?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
+      'align-items:center;justify-content:center;'+
+      'height:'+rh+'px;box-sizing:border-box;'+dateBg;
+    var dateFs = inlineLayout ? 10 : (rh>=24?13:10);
+    dlbl.innerHTML = '<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
+      (hideDow ? '' : '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
+    grid.appendChild(dlbl);
+
+    // 各担当者カラム
+    assignees.forEach(function(name){
+      var personTasks = groups[name];
+      // この日にこの担当者がアサインされているタスク
+      var activeTasks = personTasks.filter(function(t){
+        return t.startDate && t.endDate && d>=t.startDate && d<=t.endDate;
+      });
+
+      var cell = document.createElement('div');
+      var cellBg = isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':'');
+      cell.style.cssText = 'border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
+        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;'+
+        (activeTasks.length?'cursor:pointer;':'')+
+        (cellBg?'background:'+cellBg+';':'');
+
+      if (activeTasks.length > 0) {
+        // 各タスクを横に並べたストライプとして表示
+        var stripeW = 100 / activeTasks.length;
+        activeTasks.forEach(function(task, idx){
+          var proj = data.projects.find(function(p){return p.id===task.projectId;}) || {};
+          var col = proj.color || '#666';
+          var stripe = document.createElement('div');
+          stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
+            'background:'+col+';opacity:.7;pointer-events:none;'+
+            (d===task.startDate?'border-left:2px solid '+col+';':'')+
+            (d===task.endDate?'border-right:2px solid '+col+';':'');
+          cell.appendChild(stripe);
+          // タスク開始日にラベル
+          if (d===task.startDate && rh>=18) {
+            var lbl = document.createElement('div');
+            lbl.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;width:'+stripeW+'%;'+
+              'top:50%;transform:translateY(-50%);font-size:8px;font-weight:700;color:#fff;'+
+              'text-shadow:0 1px 1px rgba(0,0,0,.5);padding:0 2px;'+
+              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;text-align:center;line-height:1;';
+            lbl.textContent = task.name;
+            cell.appendChild(lbl);
+          }
+        });
+
+        // クリックで最初のタスクの工程表へ移動
+        var firstTask = activeTasks[0];
+        cell.addEventListener('click', function(){
+          state.selectedProjectId = firstTask.projectId;
+          state.selectedTaskId = firstTask.id;
+          navigate('gantt');
+        });
+      }
+
+      grid.appendChild(cell);
+    });
+  });
+
+  // ズーム適用
   qs('#sched-grid').style.zoom = state.schedZoom;
   qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
 }
@@ -4101,6 +4277,13 @@ document.addEventListener('DOMContentLoaded', function(){
       schedScale=btn.dataset.sscale;
       qsa('[data-sscale]').forEach(function(b){b.classList.remove('active');});
       btn.classList.add('active');
+      renderSchedule();
+    });
+  });
+  // 案件別 / 担当者別 切替
+  qsa('[data-smode]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.schedMode = btn.dataset.smode;
       renderSchedule();
     });
   });
