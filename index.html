@@ -196,7 +196,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .drawing-drop-area:hover,.drawing-drop-area.drag-over { border-color:var(--primary); background:rgba(79,142,255,.06); color:var(--primary); }
 .mail-step { display:flex; align-items:flex-start; gap:10px; font-size:12px; color:var(--text-sub); line-height:1.5; }
 .mail-step-num { width:20px; height:20px; border-radius:50%; background:var(--primary); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
-.gantt-toolbar { padding: 10px 20px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; max-height: 80px; overflow: hidden; transition: max-height .28s ease, padding .28s ease, opacity .2s ease, border .28s ease; }
+.gantt-toolbar { padding: 10px 20px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; max-height: 80px; overflow: hidden; transition: max-height .18s ease, padding .18s ease, opacity .15s ease, border .18s ease; will-change: max-height; }
 .gantt-tabs { transition: max-height .28s ease, padding .28s ease, opacity .2s ease; }
 #view-gantt.gantt-header-hidden .gantt-toolbar { max-height: 0; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0; border-bottom-color: transparent; }
 #view-gantt.gantt-header-hidden .gantt-tabs { max-height: 0; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0; }
@@ -411,8 +411,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .proj-task-row .ptask-del { position: absolute; top: 6px; right: 8px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 18px; line-height: 1; padding: 0; }
 
 /* 全体スケジュール表 */
-.schedule-toolbar { padding: 10px 20px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; transition: max-height .28s ease, padding .28s ease, opacity .2s ease, border .28s ease; max-height: 120px; overflow: hidden; }
-#view-schedule .page-header { transition: max-height .28s ease, padding .28s ease, opacity .2s ease, border .28s ease; max-height: 120px; overflow: hidden; }
+.schedule-toolbar { padding: 10px 20px; background: var(--bg-surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; flex-shrink: 0; flex-wrap: wrap; transition: max-height .18s ease, padding .18s ease, opacity .15s ease, border .18s ease; max-height: 120px; overflow: hidden; will-change: max-height; }
+#view-schedule .page-header { transition: max-height .18s ease, padding .18s ease, opacity .15s ease, border .18s ease; max-height: 120px; overflow: hidden; will-change: max-height; }
 #view-schedule.sched-header-hidden .page-header,
 #view-schedule.sched-header-hidden .schedule-toolbar { max-height: 0; padding-top: 0 !important; padding-bottom: 0 !important; opacity: 0; border-bottom-color: transparent; }
 .schedule-container { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: var(--bg); }
@@ -4362,36 +4362,52 @@ document.addEventListener('DOMContentLoaded', function(){
   qs('#btn-print-schedule').addEventListener('click', function(){ window.print(); });
 
   // スケジュール スクロールでヘッダー表示切替
-  (function(){
-    var container=qs('.schedule-container');
-    var view=qs('#view-schedule');
-    var lastY=0;
-    container.addEventListener('scroll',function(){
-      var y=container.scrollTop;
-      if(y>lastY && y>30){
-        view.classList.add('sched-header-hidden');
-      } else if(y<lastY || y<=30){
-        view.classList.remove('sched-header-hidden');
-      }
-      lastY=y;
-    });
-  })();
-
-  // 工程表 スクロールでヘッダー表示切替
-  (function(){
-    var container=qs('.gantt-container');
-    var view=qs('#view-gantt');
-    var lastY=0;
-    container.addEventListener('scroll',function(){
-      var y=container.scrollTop;
-      if(y>lastY && y>30){
-        view.classList.add('gantt-header-hidden');
-      } else if(y<lastY || y<=30){
-        view.classList.remove('gantt-header-hidden');
-      }
-      lastY=y;
-    });
-  })();
+  // ヒステリシス + requestAnimationFrame スロットルでガタつき防止
+  function setupScrollHide(containerSel, viewSel, hiddenClass){
+    var container = qs(containerSel);
+    var view = qs(viewSel);
+    if (!container || !view) return;
+    var ticking = false;
+    var lastY = 0;
+    var hidden = false;
+    var HIDE_AT = 120;  // 120px以上下スクロール → 隠す
+    var SHOW_AT = 40;   // 40px以下に戻る → 表示
+    var DELTA   = 12;   // 12px以上の方向転換のみ反応
+    var refY = 0;       // 反応の起点
+    container.addEventListener('scroll', function(){
+      var y = container.scrollTop;
+      if (ticking) { lastY = y; return; }
+      ticking = true;
+      requestAnimationFrame(function(){
+        var dy = y - refY;
+        if (!hidden) {
+          if (y > HIDE_AT && dy > DELTA) {
+            view.classList.add(hiddenClass);
+            hidden = true;
+            refY = y;
+          } else if (dy < -DELTA) {
+            refY = y;
+          }
+        } else {
+          if (y < SHOW_AT) {
+            view.classList.remove(hiddenClass);
+            hidden = false;
+            refY = y;
+          } else if (dy < -DELTA) {
+            view.classList.remove(hiddenClass);
+            hidden = false;
+            refY = y;
+          } else if (dy > DELTA) {
+            refY = y;
+          }
+        }
+        lastY = y;
+        ticking = false;
+      });
+    }, { passive: true });
+  }
+  setupScrollHide('.schedule-container', '#view-schedule', 'sched-header-hidden');
+  setupScrollHide('.gantt-container',    '#view-gantt',    'gantt-header-hidden');
 
   // ===== ズーム機能（スケジュール表・工程表）=====
   var ZOOM_MIN = 0.3, ZOOM_MAX = 3.0, ZOOM_STEP = 0.1;
