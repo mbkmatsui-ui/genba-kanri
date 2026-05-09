@@ -3258,18 +3258,14 @@ function renderSchedule() {
       var projProg=calcProgress(proj.id);
       var projColor=proj.color||'#888';
       var cell=document.createElement('div');
-      // 期間内セルの背景色を濃くして視認性を改善（1a→55: 33%透明度）
-      var cellBg=inRange?projColor+'55':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 案件期間内：かなり薄い色（タスクのない日は背景のみ）
+      var cellBg=inRange?projColor+'15':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
         (inRange&&isStart?'border-top:3px solid '+projColor+';':'')+
         (inRange&&isEnd?'border-bottom:3px solid '+projColor+';':'');
       if(inRange){
-        var fill=document.createElement('div');
-        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+(projProg||0)+'%;'+
-          'background:'+projColor+'77;pointer-events:none;';
-        cell.appendChild(fill);
         if(isStart&&rh>=18){
           var lbl=document.createElement('div');
           lbl.style.cssText='position:absolute;left:0;right:0;top:1px;font-size:8px;font-weight:700;'+
@@ -3279,7 +3275,7 @@ function renderSchedule() {
           cell.appendChild(lbl);
         }
       }
-      // タスクの可視化：このプロジェクトのタスクで、この日付に該当するものを縦のストライプとして描画
+      // タスクの可視化：このプロジェクトのタスクで、この日付に該当するものを濃い色の縦ストライプとして描画
       var projTasks=(data.tasks||[]).filter(function(t){
         return t.projectId===proj.id && t.startDate && t.endDate && d>=t.startDate && d<=t.endDate;
       });
@@ -3288,10 +3284,11 @@ function renderSchedule() {
         projTasks.forEach(function(task, idx){
           var taskColor = task.color || projColor;
           var stripe = document.createElement('div');
+          // タスクの日は濃い色で表示（opacity 0.95）
           stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
-            'background:'+taskColor+';opacity:.55;pointer-events:none;z-index:1;'+
-            (d===task.startDate?'border-left:1.5px solid '+taskColor+';':'')+
-            (d===task.endDate?'border-right:1.5px solid '+taskColor+';':'');
+            'background:'+taskColor+';opacity:.95;pointer-events:none;z-index:1;'+
+            (d===task.startDate?'border-left:2px solid '+taskColor+';':'')+
+            (d===task.endDate?'border-right:2px solid '+taskColor+';':'');
           cell.appendChild(stripe);
           // タスク名を開始日に小さく表示（行高が十分なときのみ）
           if (d===task.startDate && rh>=16) {
@@ -3510,7 +3507,8 @@ function renderScheduleByAssignee() {
       var isEnd   = d===pr.end;
       var col = proj.color || '#666';
       var cell = document.createElement('div');
-      var cellBg = inRange ? col+'55' : (isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 案件期間内：かなり薄い色（タスクのない日は背景のみ）
+      var cellBg = inRange ? col+'15' : (isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText = 'border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
@@ -3518,13 +3516,6 @@ function renderScheduleByAssignee() {
         (inRange&&isEnd?'border-bottom:3px solid '+col+';':'');
 
       if (inRange) {
-        // 進捗フィル（その担当者のタスクの進捗平均）
-        var ts = myTasks.filter(function(t){ return t.projectId===proj.id; });
-        var avgProg = ts.length ? Math.round(ts.reduce(function(s,t){ return s+(+t.progress||0); },0)/ts.length) : 0;
-        var fill = document.createElement('div');
-        fill.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:'+avgProg+'%;'+
-          'background:'+col+'77;pointer-events:none;';
-        cell.appendChild(fill);
         if (isStart && rh>=18) {
           var lbl = document.createElement('div');
           lbl.style.cssText = 'position:absolute;left:0;right:0;top:1px;font-size:8px;font-weight:700;'+
@@ -3533,6 +3524,31 @@ function renderScheduleByAssignee() {
           lbl.textContent = '▶ 開始';
           cell.appendChild(lbl);
         }
+      }
+      // タスクの日は濃い色のストライプで強調
+      var dayTasks = myTasks.filter(function(t){
+        return t.projectId===proj.id && t.startDate && t.endDate && d>=t.startDate && d<=t.endDate;
+      });
+      if (dayTasks.length > 0) {
+        var stripeW = 100 / dayTasks.length;
+        dayTasks.forEach(function(task, idx){
+          var taskColor = task.color || col;
+          var stripe = document.createElement('div');
+          stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
+            'background:'+taskColor+';opacity:.95;pointer-events:none;z-index:1;'+
+            (d===task.startDate?'border-left:2px solid '+taskColor+';':'')+
+            (d===task.endDate?'border-right:2px solid '+taskColor+';':'');
+          cell.appendChild(stripe);
+          // タスク名を開始日に
+          if (d===task.startDate && rh>=16) {
+            var tlbl = document.createElement('div');
+            tlbl.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;width:'+stripeW+'%;top:50%;transform:translateY(-50%);'+
+              'font-size:7px;font-weight:700;color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.5);'+
+              'padding:0 1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;text-align:center;line-height:1;';
+            tlbl.textContent = task.name;
+            cell.appendChild(tlbl);
+          }
+        });
       }
       cell.addEventListener('click', function(){
         state.selectedProjectId = proj.id;
