@@ -971,6 +971,7 @@ body.is-admin .admin-only { display:flex; }
           <button class="zoom-btn active" data-smode="project">案件別</button>
           <button class="zoom-btn" data-smode="assignee">担当者別</button>
         </div>
+        <select id="sched-assignee-select" style="display:none;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:#fff;font-size:13px;font-family:inherit;cursor:pointer;min-width:140px"></select>
         <div class="zoom-group">
           <button class="zoom-btn active" data-sscale="month">月</button>
           <button class="zoom-btn" data-sscale="week">週</button>
@@ -1596,7 +1597,7 @@ function describeTaskDiff(o, n) {
 // ===== State =====
 var data = loadData();
 var isMobileDevice = window.innerWidth <= 768;
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null, schedMode:'project' };
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null, schedMode:'project', schedAssignee:'' };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -3135,8 +3136,12 @@ function renderSchedule() {
   qsa('#sched-mode-toggle .zoom-btn').forEach(function(b){
     b.classList.toggle('active', b.dataset.smode === (state.schedMode||'project'));
   });
+  // 案件別モード時は担当者選択ドロップダウンを隠す
+  var assigneeSel = qs('#sched-assignee-select');
   if ((state.schedMode||'project') === 'assignee') {
     return renderScheduleByAssignee();
+  } else {
+    if (assigneeSel) assigneeSel.style.display = 'none';
   }
   var range = schedGetRange();
   var days = buildDays(range.start, range.end);
@@ -3318,28 +3323,99 @@ function renderSchedule() {
 }
 
 // ===== 担当者別 全体スケジュール =====
+// 担当者を選択すると、その人が関わる案件だけが上に並んだ表を表示。
+// 各案件の期間は「その担当者がアサインされているタスクの期間の合算」を使う。
+function getAssigneeList() {
+  var set = {};
+  (data.tasks||[]).forEach(function(t){
+    var a = (t.assignee||'').trim();
+    if (a) set[a] = true;
+  });
+  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+}
+
+function updateAssigneeSelectOptions() {
+  var sel = qs('#sched-assignee-select');
+  if (!sel) return;
+  var list = getAssigneeList();
+  var current = state.schedAssignee || '';
+  sel.innerHTML = '<option value="">担当者を選択…</option>' + list.map(function(n){
+    return '<option value="'+n.replace(/"/g,'&quot;')+'"'+(n===current?' selected':'')+'>'+n+'</option>';
+  }).join('');
+}
+
 function renderScheduleByAssignee() {
-  var range = schedGetRange();
+  var sel = qs('#sched-assignee-select');
+  if (sel) sel.style.display = '';
+  updateAssigneeSelectOptions();
+
+  var grid = qs('#sched-grid');
+  var assignee = state.schedAssignee || '';
+  var allAssignees = getAssigneeList();
+
+  // 担当者がそもそもいない
+  if (!allAssignees.length) {
+    grid.style.cssText = 'display:block;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
+    grid.innerHTML = 'タスクに担当者を設定すると、担当者別スケジュールが表示されます';
+    return;
+  }
+  // 担当者未選択
+  if (!assignee) {
+    grid.style.cssText = 'display:block;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
+    grid.innerHTML = '上の <strong>「担当者を選択…」</strong> から見たい人を選んでください';
+    return;
+  }
+
+  // この担当者がアサインされているタスク
+  var myTasks = (data.tasks||[]).filter(function(t){
+    return (t.assignee||'').trim() === assignee;
+  });
+  // 関わっている案件の id 集合
+  var projectIds = {};
+  myTasks.forEach(function(t){ if (t.projectId) projectIds[t.projectId] = true; });
+  // 関連プロジェクト（あれば実体・なければスキップ）
+  var myProjects = (data.projects||[]).filter(function(p){ return projectIds[p.id]; });
+
+  if (!myProjects.length) {
+    grid.style.cssText = 'display:block;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
+    grid.innerHTML = '<strong>'+assignee+'</strong> さんがアサインされている案件はありません';
+    return;
+  }
+
+  // 各プロジェクトでこの担当者の関わる期間を計算
+  var projectRanges = {}; // pid -> {start, end}
+  myProjects.forEach(function(p){
+    var ts = myTasks.filter(function(t){ return t.projectId===p.id; });
+    var starts = ts.map(function(t){return t.startDate;}).filter(Boolean).sort();
+    var ends   = ts.map(function(t){return t.endDate;}).filter(Boolean).sort();
+    projectRanges[p.id] = {
+      start: starts.length ? starts[0] : (p.startDate||todayStr()),
+      end:   ends.length ? ends[ends.length-1] : (p.endDate||addDays(todayStr(),30))
+    };
+  });
+
+  // 全体の表示範囲（全プロジェクトの和）
+  var allStarts = myProjects.map(function(p){ return projectRanges[p.id].start; }).filter(Boolean).sort();
+  var allEnds   = myProjects.map(function(p){ return projectRanges[p.id].end; }).filter(Boolean).sort();
+  var range = {
+    start: addDays(allStarts.length?allStarts[0]:todayStr(), -7),
+    end:   addDays(allEnds.length?allEnds[allEnds.length-1]:addDays(todayStr(),30), 14)
+  };
   var days = buildDays(range.start, range.end);
   var rh = SCHED_CW[schedScale];
   var today = todayStr();
   var DOW = ['日','月','火','水','木','金','土'];
 
-  // 担当者ごとにタスクをグループ化
-  var groups = {}; // assignee -> [tasks]
-  (data.tasks||[]).forEach(function(t){
-    var a = (t.assignee||'').trim();
-    if (!a) return;
-    if (!groups[a]) groups[a] = [];
-    groups[a].push(t);
+  // 開始日順に並べる
+  var sortedProjects = myProjects.slice().sort(function(a,b){
+    var sa = projectRanges[a.id].start, sb = projectRanges[b.id].start;
+    return sa<sb?-1:sa>sb?1:0;
   });
-  var assignees = Object.keys(groups).sort(function(a,b){ return a.localeCompare(b,'ja'); });
 
-  var DATE_W = 56, COL_W = 110, HDR_H = 70;
-  var grid = qs('#sched-grid'); grid.innerHTML = '';
+  var DATE_W = 56, PROJ_W = 90, HDR_H = 82;
+  grid.innerHTML = '';
   grid.style.cssText = 'display:grid;grid-template-columns:'+DATE_W+'px '+
-    (assignees.length?'repeat('+assignees.length+','+COL_W+'px)':'1fr')+
-    ';min-width:max-content;';
+    'repeat('+sortedProjects.length+','+PROJ_W+'px);min-width:max-content;';
 
   // Corner
   var corner = document.createElement('div');
@@ -3347,40 +3423,42 @@ function renderScheduleByAssignee() {
     'border-right:2px solid var(--border);border-bottom:2px solid var(--border);'+
     'font-size:10px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;'+
     'justify-content:center;height:'+HDR_H+'px;box-sizing:border-box;';
-  corner.textContent = '日付';
+  corner.textContent = assignee + ' さん';
   grid.appendChild(corner);
 
-  // 担当者がいない場合
-  if (!assignees.length) {
-    var empty = document.createElement('div');
-    empty.style.cssText = 'grid-column:2;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
-    empty.textContent = 'タスクに担当者を設定すると、担当者別スケジュールが表示されます';
-    grid.appendChild(empty);
-    qs('#sched-grid').style.zoom = state.schedZoom;
-    qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
-    return;
-  }
-
-  // 担当者カラムヘッダー
-  assignees.forEach(function(name){
-    var taskCount = groups[name].length;
+  // プロジェクト ヘッダー（案件別と同じタイル形式）
+  var statusLblMap = { active:'進行中', completed:'完了', pending:'計画中' };
+  sortedProjects.forEach(function(proj){
     var hdr = document.createElement('div');
-    hdr.style.cssText = 'position:sticky;top:0;z-index:20;background:#2e2e2e;color:#fff;'+
+    hdr.style.cssText = 'position:sticky;top:0;z-index:20;'+
+      'background:var(--bg-raised);'+
       'border-right:1px solid var(--border-lt);border-bottom:2px solid var(--border);'+
-      'padding:8px 6px;height:'+HDR_H+'px;box-sizing:border-box;cursor:default;'+
-      'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;';
-    var nm = document.createElement('div');
-    nm.style.cssText = 'font-size:13px;font-weight:700;line-height:1.2;text-align:center;'+
-      'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;';
-    nm.textContent = name;
-    var ct = document.createElement('div');
-    ct.style.cssText = 'font-size:10px;color:#bbb;font-weight:600;';
-    ct.textContent = taskCount + ' タスク';
-    hdr.appendChild(nm); hdr.appendChild(ct);
+      'padding:5px 4px;height:'+HDR_H+'px;box-sizing:border-box;cursor:pointer;';
+    var tile = document.createElement('div');
+    tile.style.cssText = 'background:'+(proj.color||'#666')+';border-radius:16px;'+
+      'height:100%;padding:8px 7px 6px;display:flex;flex-direction:column;'+
+      'justify-content:space-between;overflow:hidden;'+
+      'box-shadow:0 2px 8px rgba(0,0,0,.25);';
+    var nameDiv = document.createElement('div');
+    nameDiv.style.cssText = 'font-size:11px;font-weight:700;color:#fff;line-height:1.35;'+
+      'display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;'+
+      'text-shadow:0 1px 3px rgba(0,0,0,.3);flex:1;';
+    nameDiv.textContent = proj.name;
+    var taskCount = myTasks.filter(function(t){ return t.projectId===proj.id; }).length;
+    var badge = document.createElement('span');
+    badge.style.cssText = 'font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;'+
+      'background:rgba(255,255,255,.85);color:#222;align-self:flex-start;flex-shrink:0;margin-top:2px;';
+    badge.textContent = (statusLblMap[proj.status]||'') + ' / ' + taskCount + 'タスク';
+    tile.appendChild(nameDiv); tile.appendChild(badge);
+    hdr.appendChild(tile);
+    hdr.addEventListener('click', function(){
+      state.selectedProjectId = proj.id;
+      navigate('gantt');
+    });
     grid.appendChild(hdr);
   });
 
-  // 月見出し制御
+  // 月見出し
   var curMonth = '';
   days.forEach(function(d){
     var dow = new Date(d+'T00:00:00').getDay();
@@ -3388,7 +3466,6 @@ function renderScheduleByAssignee() {
     var isToday = d===today;
     var month = d.slice(0,7);
 
-    // Month separator
     if (month !== curMonth) {
       curMonth = month;
       var mp = month.split('-');
@@ -3399,7 +3476,7 @@ function renderScheduleByAssignee() {
         'padding:0 6px;display:flex;align-items:center;height:20px;white-space:nowrap;';
       mlbl.textContent = mp[0]+'年'+parseInt(mp[1])+'月';
       grid.appendChild(mlbl);
-      assignees.forEach(function(){
+      sortedProjects.forEach(function(){
         var mc = document.createElement('div');
         mc.style.cssText = 'background:var(--bg-raised);border-right:1px solid var(--border-lt);'+
           'border-bottom:1px solid var(--border);border-top:1px solid var(--border);height:20px;';
@@ -3407,7 +3484,7 @@ function renderScheduleByAssignee() {
       });
     }
 
-    // Date label
+    // 日付ラベル
     var dlbl = document.createElement('div');
     var dateBg = isToday ? 'background:#2563eb;color:#fff;' :
       isWkend ? 'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';' :
@@ -3425,59 +3502,46 @@ function renderScheduleByAssignee() {
       (hideDow ? '' : '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
     grid.appendChild(dlbl);
 
-    // 各担当者カラム
-    assignees.forEach(function(name){
-      var personTasks = groups[name];
-      // この日にこの担当者がアサインされているタスク
-      var activeTasks = personTasks.filter(function(t){
-        return t.startDate && t.endDate && d>=t.startDate && d<=t.endDate;
-      });
-
+    // プロジェクトセル（その担当者の期間内かどうか）
+    sortedProjects.forEach(function(proj){
+      var pr = projectRanges[proj.id];
+      var inRange = pr.start && pr.end && d>=pr.start && d<=pr.end;
+      var isStart = d===pr.start;
+      var isEnd   = d===pr.end;
+      var col = proj.color || '#666';
       var cell = document.createElement('div');
-      var cellBg = isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':'');
+      var cellBg = inRange ? col+'55' : (isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
       cell.style.cssText = 'border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
-        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;'+
-        (activeTasks.length?'cursor:pointer;':'')+
-        (cellBg?'background:'+cellBg+';':'');
+        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
+        (cellBg?'background:'+cellBg+';':'')+
+        (inRange&&isStart?'border-top:3px solid '+col+';':'')+
+        (inRange&&isEnd?'border-bottom:3px solid '+col+';':'');
 
-      if (activeTasks.length > 0) {
-        // 各タスクを横に並べたストライプとして表示
-        var stripeW = 100 / activeTasks.length;
-        activeTasks.forEach(function(task, idx){
-          var proj = data.projects.find(function(p){return p.id===task.projectId;}) || {};
-          var col = proj.color || '#666';
-          var stripe = document.createElement('div');
-          stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
-            'background:'+col+';opacity:.7;pointer-events:none;'+
-            (d===task.startDate?'border-left:2px solid '+col+';':'')+
-            (d===task.endDate?'border-right:2px solid '+col+';':'');
-          cell.appendChild(stripe);
-          // タスク開始日にラベル
-          if (d===task.startDate && rh>=18) {
-            var lbl = document.createElement('div');
-            lbl.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;width:'+stripeW+'%;'+
-              'top:50%;transform:translateY(-50%);font-size:8px;font-weight:700;color:#fff;'+
-              'text-shadow:0 1px 1px rgba(0,0,0,.5);padding:0 2px;'+
-              'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:2;text-align:center;line-height:1;';
-            lbl.textContent = task.name;
-            cell.appendChild(lbl);
-          }
-        });
-
-        // クリックで最初のタスクの工程表へ移動
-        var firstTask = activeTasks[0];
-        cell.addEventListener('click', function(){
-          state.selectedProjectId = firstTask.projectId;
-          state.selectedTaskId = firstTask.id;
-          navigate('gantt');
-        });
+      if (inRange) {
+        // 進捗フィル（その担当者のタスクの進捗平均）
+        var ts = myTasks.filter(function(t){ return t.projectId===proj.id; });
+        var avgProg = ts.length ? Math.round(ts.reduce(function(s,t){ return s+(+t.progress||0); },0)/ts.length) : 0;
+        var fill = document.createElement('div');
+        fill.style.cssText = 'position:absolute;left:0;top:0;bottom:0;width:'+avgProg+'%;'+
+          'background:'+col+'77;pointer-events:none;';
+        cell.appendChild(fill);
+        if (isStart && rh>=18) {
+          var lbl = document.createElement('div');
+          lbl.style.cssText = 'position:absolute;left:0;right:0;top:1px;font-size:8px;font-weight:700;'+
+            'color:'+col+';padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
+            'z-index:1;text-align:center;line-height:1.2;';
+          lbl.textContent = '▶ 開始';
+          cell.appendChild(lbl);
+        }
       }
-
+      cell.addEventListener('click', function(){
+        state.selectedProjectId = proj.id;
+        navigate('gantt');
+      });
       grid.appendChild(cell);
     });
   });
 
-  // ズーム適用
   qs('#sched-grid').style.zoom = state.schedZoom;
   qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
 }
@@ -4287,6 +4351,14 @@ document.addEventListener('DOMContentLoaded', function(){
       renderSchedule();
     });
   });
+  // 担当者選択ドロップダウン
+  var assigneeSel = qs('#sched-assignee-select');
+  if (assigneeSel) {
+    assigneeSel.addEventListener('change', function(){
+      state.schedAssignee = assigneeSel.value;
+      renderSchedule();
+    });
+  }
   qs('#btn-print-schedule').addEventListener('click', function(){ window.print(); });
 
   // スケジュール スクロールでヘッダー表示切替
