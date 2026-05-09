@@ -899,7 +899,7 @@ body.is-admin .admin-only { display:flex; }
             <div class="detail-body">
               <div class="detail-field"><label>カテゴリ</label><div class="field-value" id="detail-category">—</div></div>
               <div class="detail-field"><label>管理者</label><div class="field-value" id="detail-manager">—</div></div>
-              <div class="detail-field"><label>担当者</label><div class="field-value" id="detail-assignee">—</div></div>
+              <div class="detail-field"><label>現場主任</label><div class="field-value" id="detail-assignee">—</div></div>
               <div class="detail-field"><label>期間</label><div class="field-value" id="detail-dates">—</div></div>
               <div class="detail-field">
                 <label>進捗率</label>
@@ -1139,7 +1139,13 @@ body.is-admin .admin-only { display:flex; }
         <input type="text" id="proj-client-manual" placeholder="発注者名を入力" style="display:none;margin-top:6px" />
       </div>
       <div class="form-group"><label>現場所在地</label><input type="text" id="proj-location" placeholder="例：東京都渋谷区" /></div>
-      <div class="form-group"><label>担当者</label><input type="text" id="proj-assignee" placeholder="例：田中 健二" /></div>
+      <div class="form-group"><label>担当者</label>
+        <select id="proj-assignee">
+          <option value="">— 選択 —</option>
+          <option>厚之</option>
+          <option>汐海</option>
+        </select>
+      </div>
       <div class="form-row">
         <div class="form-group">
           <label>着工日</label>
@@ -1233,12 +1239,19 @@ body.is-admin .admin-only { display:flex; }
         <div class="form-group"><label>管理者</label><input type="text" id="task-manager" placeholder="例：佐藤 部長" /></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>担当者</label>
-          <select id="task-assignee">
+        <div class="form-group"><label>現場主任</label>
+          <select id="task-supervisor">
             <option value="">— 選択 —</option>
             <option>厚之</option>
             <option>汐海</option>
+            <option>タクヤ</option>
+            <option>金谷</option>
+            <option>植木</option>
+            <option>星野</option>
+            <option>川上</option>
+            <option value="__manual__">✏️ 手動で入力する</option>
           </select>
+          <input type="text" id="task-supervisor-manual" placeholder="現場主任名を入力" style="display:none;margin-top:6px" />
         </div>
         <div class="form-group"></div>
       </div>
@@ -1586,7 +1599,6 @@ function describeTaskDiff(o, n) {
   if (o.status !== n.status) diffs.push('ステータス: '+(o.status||'-')+'→'+(n.status||'-'));
   if (o.startDate !== n.startDate) diffs.push('開始: '+(o.startDate||'-')+'→'+(n.startDate||'-'));
   if (o.endDate !== n.endDate) diffs.push('終了: '+(o.endDate||'-')+'→'+(n.endDate||'-'));
-  if ((o.assignee||'') !== (n.assignee||'')) diffs.push('担当者');
   if ((o.manager||'') !== (n.manager||'')) diffs.push('管理者');
   if ((o.supervisor||'') !== (n.supervisor||'')) diffs.push('現場主任');
   if (!!o.materialOrdered !== !!n.materialOrdered) diffs.push(n.materialOrdered ? '材料発注: 済' : '材料発注: 未');
@@ -1881,7 +1893,7 @@ function renderTodaySchedule() {
           getTaskIconSVG(t.name,32)+
           '<div style="min-width:0">'+
           '<div class="today-task-name">'+t.name+'</div>'+
-          '<div class="today-task-meta">'+pName+' ／ '+t.assignee+'</div>'+
+          '<div class="today-task-meta">'+pName+' ／ '+(t.supervisor||'')+'</div>'+
           '</div>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
@@ -2172,7 +2184,7 @@ function renderMaterialAlert() {
     } else if (s === 'overdue') {
       badgeText = '+' + daysOverdue + '日超過';
       extraHtml = '<div class="mal-overdue-wrap">'
-        + '<div class="mal-overdue-msg">⚠ ' + (t.assignee||'担当者') + 'さん、完了が確認できていません。理由のコメントをお願いします。</div>'
+        + '<div class="mal-overdue-msg">⚠ ' + (t.supervisor||'現場主任') + 'さん、完了が確認できていません。理由のコメントをお願いします。</div>'
         + '<textarea class="mal-comment-input" data-tid="' + t.id + '" placeholder="理由を入力してください..."></textarea>'
         + '<button class="mal-report-btn" data-action="report" data-tid="' + t.id + '">報告する</button>'
         + '</div>';
@@ -2189,7 +2201,7 @@ function renderMaterialAlert() {
       + '<div class="material-alert-info">'
       + '<div class="material-alert-task">' + t.name + '</div>'
       + '<div class="material-alert-proj" style="color:' + (proj.color||'#888') + '">' + (proj.name||'')
-        + (t.assignee ? ' ／ ' + t.assignee : '') + '</div>'
+        + (t.supervisor ? ' ／ ' + t.supervisor : '') + '</div>'
       + '</div>'
       + actionHtml
       + '</div>'
@@ -2257,7 +2269,7 @@ function renderMaterialAlert() {
       } else if (action === 'report') {
         var ta = wrap.querySelector('textarea[data-tid="' + tid + '"]');
         var note = ta ? ta.value.trim() : '';
-        if (!note) { alert((task.assignee||'担当者') + 'さん、理由を入力してから報告してください。'); return; }
+        if (!note) { alert((task.supervisor||'現場主任') + 'さん、理由を入力してから報告してください。'); return; }
         var prevNote_r = task.completionNote;
         task.completionNote = note;
         saveData(data);
@@ -2748,7 +2760,7 @@ function renderGanttOverview() {
       var stLbl={done:'完了',active:'進行中',pending:'未着手',delay:'遅延'};
       return '<div style="background:var(--bg-surface);border:1px solid var(--border);border-left:4px solid '+sc2+';border-radius:var(--radius);padding:10px 12px;display:flex;align-items:center;gap:10px">'+
         '<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:var(--text)">'+t.name+'</div>'+
-        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+t.assignee+(t.startDate?' · '+t.startDate.replace(/-/g,'/'):'')+'</div></div>'+
+        '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">'+(t.supervisor||'')+(t.startDate?' · '+t.startDate.replace(/-/g,'/'):'')+'</div></div>'+
         '<div style="text-align:right;flex-shrink:0"><div style="font-size:13px;font-weight:700;color:'+sc2+'">'+t.progress+'%</div>'+
         '<div style="font-size:10px;color:var(--text-muted)">'+(stLbl[t.status]||t.status)+'</div></div>'+
       '</div>';
@@ -3092,7 +3104,7 @@ function renderDetail() {
   qs('#detail-task-name').textContent=task.name;
   qs('#detail-category').textContent=task.category||'—';
   qs('#detail-manager').textContent=task.manager||'—';
-  qs('#detail-assignee').textContent=task.assignee||'—';
+  qs('#detail-assignee').textContent=task.supervisor||'—';
   qs('#detail-dates').textContent=fmt(task.startDate)+' 〜 '+fmt(task.endDate);
   var range=qs('#detail-progress-range');
   range.value=task.progress;
@@ -3320,12 +3332,12 @@ function renderSchedule() {
 }
 
 // ===== 担当者別 全体スケジュール =====
-// 担当者を選択すると、その人が関わる案件だけが上に並んだ表を表示。
-// 各案件の期間は「その担当者がアサインされているタスクの期間の合算」を使う。
+// 担当者を選択すると、その担当者の案件だけが上に並んだ表を表示。
+// 案件ごとの期間はその案件の startDate / endDate を使う。
 function getAssigneeList() {
   var set = {};
-  (data.tasks||[]).forEach(function(t){
-    var a = (t.assignee||'').trim();
+  (data.projects||[]).forEach(function(p){
+    var a = (p.assignee||'').trim();
     if (a) set[a] = true;
   });
   return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
@@ -3363,31 +3375,30 @@ function renderScheduleByAssignee() {
     return;
   }
 
-  // この担当者がアサインされているタスク
-  var myTasks = (data.tasks||[]).filter(function(t){
-    return (t.assignee||'').trim() === assignee;
+  // この担当者の案件
+  var myProjects = (data.projects||[]).filter(function(p){
+    return (p.assignee||'').trim() === assignee;
   });
-  // 関わっている案件の id 集合
-  var projectIds = {};
-  myTasks.forEach(function(t){ if (t.projectId) projectIds[t.projectId] = true; });
-  // 関連プロジェクト（あれば実体・なければスキップ）
-  var myProjects = (data.projects||[]).filter(function(p){ return projectIds[p.id]; });
+  // 担当者の案件に紐づく全タスク
+  var myTasks = (data.tasks||[]).filter(function(t){
+    return myProjects.some(function(p){ return p.id===t.projectId; });
+  });
 
   if (!myProjects.length) {
     grid.style.cssText = 'display:block;padding:40px;text-align:center;color:var(--text-muted);font-size:13px;';
-    grid.innerHTML = '<strong>'+assignee+'</strong> さんがアサインされている案件はありません';
+    grid.innerHTML = '<strong>'+assignee+'</strong> さんが担当している案件はありません';
     return;
   }
 
-  // 各プロジェクトでこの担当者の関わる期間を計算
+  // 各案件の期間（案件自体の startDate / endDate を優先、なければタスクから推定）
   var projectRanges = {}; // pid -> {start, end}
   myProjects.forEach(function(p){
     var ts = myTasks.filter(function(t){ return t.projectId===p.id; });
     var starts = ts.map(function(t){return t.startDate;}).filter(Boolean).sort();
     var ends   = ts.map(function(t){return t.endDate;}).filter(Boolean).sort();
     projectRanges[p.id] = {
-      start: starts.length ? starts[0] : (p.startDate||todayStr()),
-      end:   ends.length ? ends[ends.length-1] : (p.endDate||addDays(todayStr(),30))
+      start: p.startDate || (starts.length ? starts[0] : todayStr()),
+      end:   p.endDate   || (ends.length ? ends[ends.length-1] : addDays(todayStr(),30))
     };
   });
 
@@ -3925,12 +3936,6 @@ function addProjTaskRow(task){
       '<div><label>終了日</label><input type="date" class="ptask-end" value="'+(task&&task.endDate?task.endDate:'')+'" /></div>'+
     '</div>'+
     '<div class="ptask-dates">'+
-      '<div><label>担当者</label>'+
-        '<select class="ptask-assignee">'+
-          '<option value="">— 選択 —</option>'+
-          ['厚之','汐海'].map(function(n){ return '<option'+(task&&task.assignee===n?' selected':'')+'>'+n+'</option>'; }).join('')+
-        '</select>'+
-      '</div>'+
       '<div><label>現場主任</label>'+
         '<select class="ptask-supervisor">'+
           '<option value="">— 選択 —</option>'+
@@ -4004,7 +4009,8 @@ function saveProject() {
     if(!taskName) return;
     var startDate=row.querySelector('.ptask-start').value;
     var endDate=row.querySelector('.ptask-end').value;
-    var assignee=row.querySelector('.ptask-assignee').value;
+    // 終了日が未入力なら開始日と同じにする（1日タスク用）
+    if (startDate && !endDate) endDate = startDate;
     var supSel=row.querySelector('.ptask-supervisor');
     var supervisor=supSel.value==='__manual__'
       ?row.querySelector('.ptask-supervisor-manual').value.trim()
@@ -4013,9 +4019,9 @@ function saveProject() {
     if(taskId){
       formTaskIds.push(taskId);
       var t=data.tasks.find(function(t){return t.id===taskId;});
-      if(t){ t.name=taskName; t.startDate=startDate; t.endDate=endDate; t.assignee=assignee; t.supervisor=supervisor; }
+      if(t){ t.name=taskName; t.startDate=startDate; t.endDate=endDate; t.supervisor=supervisor; }
     } else {
-      data.tasks.push({id:genId('t'),projectId:pid,name:taskName,category:'',manager:'',assignee:assignee,supervisor:supervisor,startDate:startDate,endDate:endDate,progress:0,status:'pending',note:'',materialOrdered:false,workCompleted:false,completionNote:''});
+      data.tasks.push({id:genId('t'),projectId:pid,name:taskName,category:'',manager:'',supervisor:supervisor,startDate:startDate,endDate:endDate,progress:0,status:'pending',note:'',materialOrdered:false,workCompleted:false,completionNote:''});
     }
   });
   // 編集時: フォームから削除されたタスクを除去
@@ -4070,7 +4076,20 @@ function openTaskModal(id) {
   setTaskNameSelect(task?task.name:'');
   qs('#task-category').value=task?(task.category||''):'';
   var mgr=qs('#task-manager'); if(mgr) mgr.value=task?(task.manager||''):'';
-  qs('#task-assignee').value=task?(task.assignee||''):'';
+  // 現場主任のセット（プリセット名以外なら手動入力欄へ）
+  var supSel = qs('#task-supervisor');
+  var supManual = qs('#task-supervisor-manual');
+  var presetSups = ['厚之','汐海','タクヤ','金谷','植木','星野','川上'];
+  var supVal = task ? (task.supervisor||'') : '';
+  if (supSel) {
+    if (supVal && presetSups.indexOf(supVal) < 0) {
+      supSel.value = '__manual__';
+      if (supManual) { supManual.style.display='block'; supManual.value=supVal; }
+    } else {
+      supSel.value = supVal;
+      if (supManual) { supManual.style.display='none'; supManual.value=''; }
+    }
+  }
   try { dpSetValue('task-start', task?task.startDate:''); } catch(e) { var s=qs('#task-start'); if(s) s.value=task?task.startDate:''; }
   try { dpSetValue('task-end',   task?task.endDate:'');   } catch(e) { var s=qs('#task-end');   if(s) s.value=task?task.endDate:''; }
   qs('#task-progress').value=task?task.progress:0;
@@ -4084,15 +4103,27 @@ function saveTask() {
   var name=getTaskNameValue();
   if(!name){ toast('タスク名を入力してください','error'); return; }
   var modal=qs('#modal-task'); var editId=modal.dataset.editId;
+  // 現場主任の値（手動入力対応）
+  var supSel = qs('#task-supervisor');
+  var supervisor = '';
+  if (supSel) {
+    if (supSel.value === '__manual__') {
+      supervisor = (qs('#task-supervisor-manual').value||'').trim();
+    } else {
+      supervisor = supSel.value || '';
+    }
+  }
   if(editId){
     var task=data.tasks.find(function(t){return t.id===editId;});
     task.projectId=qs('#task-project').value; task.name=name;
-    task.category=qs('#task-category').value.trim(); task.manager=qs('#task-manager').value.trim(); task.assignee=qs('#task-assignee').value.trim();
+    task.category=qs('#task-category').value.trim();
+    task.manager=qs('#task-manager').value.trim();
+    task.supervisor=supervisor;
     task.startDate=qs('#task-start').value; task.endDate=qs('#task-end').value;
     task.progress=parseInt(qs('#task-progress').value); task.status=qs('#task-status').value;
     toast('更新しました','success');
   } else {
-    data.tasks.push({id:genId('t'),projectId:qs('#task-project').value,name:name,category:qs('#task-category').value.trim(),manager:qs('#task-manager').value.trim(),assignee:qs('#task-assignee').value.trim(),startDate:qs('#task-start').value,endDate:qs('#task-end').value,progress:parseInt(qs('#task-progress').value)||0,status:qs('#task-status').value||'pending',note:''});
+    data.tasks.push({id:genId('t'),projectId:qs('#task-project').value,name:name,category:qs('#task-category').value.trim(),manager:qs('#task-manager').value.trim(),supervisor:supervisor,startDate:qs('#task-start').value,endDate:qs('#task-end').value,progress:parseInt(qs('#task-progress').value)||0,status:qs('#task-status').value||'pending',note:''});
     toast('追加しました','success');
   }
   saveData(data);
@@ -4190,6 +4221,15 @@ function renderSidebarProjects() {
     if(hid) hid.value=val;
     var txt=document.querySelector('.dp-trigger[data-hidden="'+curHiddenId+'"] .dp-trigger-text');
     if(txt){ txt.textContent=fmt(val); txt.classList.add('has-val'); }
+    // 開始日を選んだとき、終了日が空なら同じ日に自動セット（1日タスク用）
+    if (curPairId && /-(start)$/.test(curHiddenId)) {
+      var pair = document.getElementById(curPairId);
+      if (pair && !pair.value) {
+        pair.value = val;
+        var pTxt = document.querySelector('.dp-trigger[data-hidden="'+curPairId+'"] .dp-trigger-text');
+        if (pTxt) { pTxt.textContent = fmt(val); pTxt.classList.add('has-val'); }
+      }
+    }
     popup.style.display='none';
   }
 
@@ -4351,6 +4391,23 @@ document.addEventListener('DOMContentLoaded', function(){
   qs('#btn-save-project').addEventListener('click', saveProject);
   qs('#btn-proj-add-task').addEventListener('click', function(){ addProjTaskRow(null); });
   qs('#btn-save-task').addEventListener('click', saveTask);
+  // タスク現場主任の手動入力切替
+  (function(){
+    var sel = qs('#task-supervisor');
+    var manual = qs('#task-supervisor-manual');
+    if (sel && manual) {
+      sel.addEventListener('change', function(){
+        if (sel.value === '__manual__') {
+          manual.style.display = 'block';
+          manual.value = '';
+          manual.focus();
+        } else {
+          manual.style.display = 'none';
+          manual.value = '';
+        }
+      });
+    }
+  })();
   // スケジュール zoom
   qsa('[data-sscale]').forEach(function(btn){
     btn.addEventListener('click', function(){
