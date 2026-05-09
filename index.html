@@ -950,7 +950,7 @@ body.is-admin .admin-only { display:flex; }
     </section>
 
     <!-- 写真入力（iOS対応・label紐付け） -->
-    <input type="file" accept="image/*" id="photo-input-file" multiple style="position:fixed;bottom:-200px;left:-200px;width:1px;height:1px;opacity:0;pointer-events:none">
+    <input type="file" accept="image/*" id="photo-input-file" multiple style="position:fixed;bottom:-200px;left:-200px;width:1px;height:1px;opacity:0">
 
     <!-- 全体スケジュール表 -->
     <section id="view-schedule" class="view">
@@ -2560,22 +2560,33 @@ function compressImage(file, callback) {
 }
 
 function addPhotoFromFile(file) {
-  if(!file) return;
+  console.log('[photo] addPhotoFromFile called', file && file.name, file && file.size, file && file.type);
+  if(!file) { console.warn('[photo] no file'); return; }
   if(file.type && file.type!=='' && !file.type.startsWith('image/')) {
-    if (typeof toast === 'function') toast('画像ファイルを選択してください', 'error');
+    if (typeof toast === 'function') toast('画像ファイルを選択してください ('+file.type+')', 'error');
     return;
   }
   if (!state.selectedProjectId) {
     if (typeof toast === 'function') toast('まず案件を選択してください', 'error');
     return;
   }
+  toast('処理中… '+file.name);
   compressImage(file, function(dataUrl){
+    console.log('[photo] compressed, length:', dataUrl ? dataUrl.length : 0);
     var id='ph'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
     if(!Array.isArray(data.photos)) data.photos=[];
     data.photos.push({id:id,projectId:state.selectedProjectId,date:todayStr(),dataUrl:dataUrl,name:file.name});
-    saveData(data);
-    renderPhotoGallery();
-    if(typeof renderGanttPhotosTab==='function') renderGanttPhotosTab();
+    try {
+      saveData(data);
+    } catch(err) {
+      console.error('[photo] saveData failed:', err);
+      toast('保存失敗: '+err.message, 'error');
+      return;
+    }
+    try { renderPhotoGallery(); } catch(e){ console.error('[photo] gallery render error:', e); }
+    if(typeof renderGanttPhotosTab==='function') {
+      try { renderGanttPhotosTab(); } catch(e){ console.error('[photo] tab render error:', e); }
+    }
     toast('写真を追加しました');
   });
 }
@@ -2588,8 +2599,11 @@ function openPhotoChoice() {
 (function setupPhotoUI(){
   function init(){
     var fileInput=qs('#photo-input-file');
-    if(!fileInput) return;
+    if(!fileInput) { console.warn('[photo] file input not found'); return; }
+    console.log('[photo] file input setup');
     fileInput.addEventListener('change',function(){
+      console.log('[photo] change event, files:', fileInput.files && fileInput.files.length);
+      if (!fileInput.files || !fileInput.files.length) { toast('ファイルが選択されませんでした','error'); return; }
       Array.from(fileInput.files).forEach(function(f){ addPhotoFromFile(f); });
       fileInput.value='';
     });
@@ -3932,8 +3946,9 @@ document.addEventListener('DOMContentLoaded', function(){
       btn.addEventListener('click', function(){ switchGanttTab(btn.dataset.gtab); });
     }
   });
-  var addPhotoTab=qs('#btn-add-photo-tab');
-  if(addPhotoTab) addPhotoTab.addEventListener('click', function(){ openPhotoChoice && openPhotoChoice(); });
+  // 注意: btn-add-photo-tab は <label for="photo-input-file"> なので
+  // ネイティブのラベル動作でファイルピッカーが開く。
+  // 追加のJSハンドラはiOS/iPhoneで動作を阻害するため付けない。
 
   // 図面ファイル入力
   qs('#drawing-input-file').addEventListener('change', function(e){
