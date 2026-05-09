@@ -1348,16 +1348,30 @@ var DEFAULT_DATA = {
 var SAMPLE_SENTINEL_CLIENT_ID = 'c1';
 var SAMPLE_SENTINEL_CLIENT_NAME = '山田建設株式会社';
 
+// Firebase RTDB は配列を時々オブジェクト（数値キーの object）として返すため、
+// 配列に戻すヘルパー
+function objToArray(v) {
+  if (Array.isArray(v)) return v;
+  if (!v || typeof v !== 'object') return [];
+  var keys = Object.keys(v);
+  // 数値キーだけのオブジェクトを配列に変換
+  var allNumeric = keys.length > 0 && keys.every(function(k){ return /^\d+$/.test(k); });
+  if (!allNumeric) return [];
+  return keys.sort(function(a,b){ return parseInt(a,10)-parseInt(b,10); })
+             .map(function(k){ return v[k]; })
+             .filter(function(x){ return x != null; });
+}
+
 function ensureDataDefaults(d) {
-  if (!d.clients) d.clients = [];
-  if (!d.education) d.education = [];
-  if (!d.archivedProjects) d.archivedProjects = [];
-  if (!d.photos) d.photos = [];
-  if (!d.drawings) d.drawings = [];
+  d.clients = objToArray(d.clients);
+  d.education = objToArray(d.education);
+  d.archivedProjects = objToArray(d.archivedProjects);
+  d.photos = objToArray(d.photos);
+  d.drawings = objToArray(d.drawings);
+  d.tasks = objToArray(d.tasks);
+  d.projects = objToArray(d.projects);
   if (!d.settings) d.settings = { companyName: '' };
   if (d.settings.companyName===undefined) d.settings.companyName='';
-  if (!d.tasks) d.tasks = [];
-  if (!d.projects) d.projects = [];
   d.tasks.forEach(function(t){
     if(t.materialOrdered===undefined) t.materialOrdered=false;
     if(t.workCompleted===undefined) t.workCompleted=false;
@@ -1433,7 +1447,19 @@ function saveData(d) {
 
   // Firebase に書き込み（ログイン中のみ）
   if (currentUser) {
-    fbDb.ref('data').set(d).catch(function(err){ console.warn('cloud save failed:', err); });
+    fbDb.ref('data').set(d).catch(function(err){
+      console.error('cloud save failed:', err);
+      if (typeof toast === 'function') {
+        var msg = (err && err.message) ? err.message : '';
+        if (msg.toLowerCase().indexOf('size') >= 0 || msg.indexOf('large') >= 0) {
+          toast('データが大きすぎてクラウド保存できません。古い写真を削除してください', 'error');
+        } else if (err && err.code === 'PERMISSION_DENIED') {
+          toast('保存権限がありません', 'error');
+        } else {
+          toast('クラウド保存に失敗：'+(msg||'通信エラー'), 'error');
+        }
+      }
+    });
   }
 }
 
@@ -2502,20 +2528,56 @@ function openPhotoLightbox(photos, startIndex) {
   goTo(cur);
 }
 
+// 画像を圧縮（最大1200px幅、JPEG 75%品質）してデータURLを返す
+function compressImage(file, callback) {
+  var MAX_W = 1200;
+  var QUALITY = 0.75;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var w = img.width, h = img.height;
+      if (w > MAX_W) { h = Math.round(h * MAX_W / w); w = MAX_W; }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      try {
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        var dataUrl = canvas.toDataURL('image/jpeg', QUALITY);
+        callback(dataUrl);
+      } catch (err) {
+        console.warn('image compression failed:', err);
+        callback(e.target.result); // フォールバック：元データ
+      }
+    };
+    img.onerror = function() { callback(e.target.result); };
+    img.src = e.target.result;
+  };
+  reader.onerror = function() {
+    if (typeof toast === 'function') toast('写真の読み込みに失敗しました', 'error');
+  };
+  reader.readAsDataURL(file);
+}
+
 function addPhotoFromFile(file) {
   if(!file) return;
-  if(file.type && file.type!=='' && !file.type.startsWith('image/')) return;
-  var reader=new FileReader();
-  reader.onload=function(e){
-    var id='ph'+Date.now();
-    if(!data.photos) data.photos=[];
-    data.photos.push({id:id,projectId:state.selectedProjectId,date:todayStr(),dataUrl:e.target.result,name:file.name});
+  if(file.type && file.type!=='' && !file.type.startsWith('image/')) {
+    if (typeof toast === 'function') toast('画像ファイルを選択してください', 'error');
+    return;
+  }
+  if (!state.selectedProjectId) {
+    if (typeof toast === 'function') toast('まず案件を選択してください', 'error');
+    return;
+  }
+  compressImage(file, function(dataUrl){
+    var id='ph'+Date.now()+'_'+Math.random().toString(36).slice(2,8);
+    if(!Array.isArray(data.photos)) data.photos=[];
+    data.photos.push({id:id,projectId:state.selectedProjectId,date:todayStr(),dataUrl:dataUrl,name:file.name});
     saveData(data);
     renderPhotoGallery();
     if(typeof renderGanttPhotosTab==='function') renderGanttPhotosTab();
     toast('写真を追加しました');
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 function openPhotoChoice() {
