@@ -598,9 +598,19 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .user-info .user-name { white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px; }
 .user-info .user-logout { background:none;border:1px solid #555;color:#ccc;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s; }
 .user-info .user-logout:hover { background:#444;color:#fff;border-color:#777; }
+.user-info .sync-status { background:rgba(255,255,255,.06);border:1px solid #555;color:#bbb;padding:5px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;line-height:1; }
+.user-info .sync-status:hover { background:rgba(255,255,255,.12);border-color:#888;color:#fff; }
+.user-info .sync-status.synced .sync-icon { color:#3a9e68; }
+.user-info .sync-status.pending .sync-icon { color:#c08030;animation:syncSpin 1.2s linear infinite; }
+.user-info .sync-status.error  .sync-icon { color:#b83c3c; }
+.user-info .sync-status.offline { background:rgba(184,60,60,.18);border-color:#b83c3c;color:#fff; }
+.user-info .sync-status.offline .sync-icon { color:#fff; }
+@keyframes syncSpin { to { transform: rotate(360deg); } }
 @media (max-width: 768px) {
   .user-info .user-name { display:none; }
   .user-info .user-logout { padding:4px 8px;font-size:10px; }
+  .user-info .sync-status { padding:4px 7px;font-size:10px; }
+  .user-info .sync-status .sync-text { display:none; }
 }
 
 /* ===== 編集履歴ページ ===== */
@@ -704,6 +714,10 @@ body.is-admin .admin-only { display:flex; }
   <div id="header-view-label" style="display:none"></div>
   <div class="header-spacer"></div>
   <div class="user-info" id="user-info" style="display:none">
+    <button class="sync-status" id="sync-status-btn" title="クリックでクラウドから最新データを取得">
+      <span class="sync-icon" id="sync-icon">✓</span>
+      <span class="sync-text" id="sync-text">同期済</span>
+    </button>
     <div class="user-avatar" id="user-avatar"></div>
     <span class="user-name" id="user-name"></span>
     <button class="user-logout" id="user-logout-btn" title="ログアウト">ログアウト</button>
@@ -1350,6 +1364,10 @@ try { fbDb.ref('.info/connected').on('value', function(s){
   var on = s.val();
   var bn = document.getElementById('offline-banner');
   if (bn) bn.classList.toggle('show', on === false);
+  if (typeof setSyncStatus === 'function') {
+    _isOffline = (on === false);
+    setSyncStatus(_pendingWrites > 0 ? 'pending' : 'synced');
+  }
 }); } catch(e) {}
 
 var currentUser = null;        // ログイン中のユーザー
@@ -1472,7 +1490,15 @@ function saveData(d) {
 
   // Firebase に書き込み（ログイン中のみ）
   if (currentUser) {
-    fbDb.ref('data').set(d).catch(function(err){
+    setSyncStatus('pending');
+    _pendingWrites = (_pendingWrites||0) + 1;
+    fbDb.ref('data').set(d).then(function(){
+      _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
+      _lastSyncedAt = Date.now();
+      if (_pendingWrites === 0) setSyncStatus('synced');
+    }).catch(function(err){
+      _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
+      setSyncStatus('error');
       console.error('cloud save failed:', err);
       if (typeof toast === 'function') {
         var msg = (err && err.message) ? err.message : '';
@@ -1486,6 +1512,76 @@ function saveData(d) {
       }
     });
   }
+}
+
+// ===== 同期状態の表示 =====
+var _pendingWrites = 0;
+var _lastSyncedAt = 0;
+var _isOffline = false;
+
+function setSyncStatus(state) {
+  var btn = qs('#sync-status-btn');
+  if (!btn) return;
+  btn.classList.remove('synced','pending','error','offline');
+  var icon = qs('#sync-icon');
+  var text = qs('#sync-text');
+  if (_isOffline) {
+    btn.classList.add('offline');
+    if (icon) icon.textContent = '⚠';
+    if (text) text.textContent = 'オフライン';
+    return;
+  }
+  if (state === 'pending') {
+    btn.classList.add('pending');
+    if (icon) icon.textContent = '⟳';
+    if (text) text.textContent = '同期中…';
+  } else if (state === 'error') {
+    btn.classList.add('error');
+    if (icon) icon.textContent = '✕';
+    if (text) text.textContent = '同期エラー';
+  } else {
+    btn.classList.add('synced');
+    if (icon) icon.textContent = '✓';
+    var when = _lastSyncedAt ? formatSyncTime(_lastSyncedAt) : '同期済';
+    if (text) text.textContent = when;
+  }
+}
+
+function formatSyncTime(ts) {
+  var d = new Date(ts);
+  var now = new Date();
+  var diffSec = Math.round((now - d)/1000);
+  if (diffSec < 60) return '今同期';
+  var diffMin = Math.floor(diffSec/60);
+  if (diffMin < 60) return diffMin+'分前';
+  var hh = String(d.getHours()).padStart(2,'0');
+  var mm = String(d.getMinutes()).padStart(2,'0');
+  return hh+':'+mm;
+}
+
+// 手動で最新を取得（強制リロード）
+function forceSyncFromCloud() {
+  if (!currentUser) { toast('ログインしていません','error'); return; }
+  setSyncStatus('pending');
+  fbDb.ref('data').once('value').then(function(snap){
+    var cloud = snap.val();
+    if (cloud) {
+      ensureDataDefaults(cloud);
+      _suppressAuditNext = true;
+      data = cloud;
+      _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
+      try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
+      renderSidebarProjects && renderSidebarProjects();
+      if (state && state.view) navigate(state.view);
+      updateCompanyNameHeader && updateCompanyNameHeader();
+    }
+    _lastSyncedAt = Date.now();
+    setSyncStatus('synced');
+    toast('最新データに更新しました','success');
+  }).catch(function(err){
+    setSyncStatus('error');
+    toast('取得失敗：'+(err.message||'通信エラー'), 'error');
+  });
 }
 
 // ===== 監査ログ（編集履歴） =====
@@ -5043,6 +5139,12 @@ document.addEventListener('DOMContentLoaded', function(){
   var googleBtn    = qs('#login-google-btn');
   var logoutBtn    = qs('#user-logout-btn');
   var userInfoEl   = qs('#user-info');
+  var syncBtn      = qs('#sync-status-btn');
+  if (syncBtn) syncBtn.addEventListener('click', function(){ forceSyncFromCloud(); });
+  // 1分おきに同期時刻表示を更新
+  setInterval(function(){
+    if (currentUser && _pendingWrites === 0 && !_isOffline) setSyncStatus('synced');
+  }, 60000);
 
   if (googleBtn) {
     googleBtn.addEventListener('click', function(){
@@ -5146,6 +5248,8 @@ document.addEventListener('DOMContentLoaded', function(){
               updateCompanyNameHeader && updateCompanyNameHeader();
             }
           }
+          _lastSyncedAt = Date.now();
+          if (_pendingWrites === 0) setSyncStatus('synced');
         }, function(err){
           // ルールで弾かれた → アクセス拒否
           if (err && err.code === 'PERMISSION_DENIED') {
