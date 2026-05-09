@@ -2391,6 +2391,7 @@ function buildPrintableGanttHtml(p) {
         var span = endIdx - startIdx + 1;
         content = '<div class="arrow-wrap" style="width:'+(span*100)+'%" data-arrow-row="'+rowIdx+'">'+
           '<div class="arrow-label" contenteditable="true" spellcheck="false">・'+escHtml(t.name)+'</div>'+
+          '<button class="arrow-del" title="矢印を削除" type="button">✕</button>'+
           '<div class="arrow-line"></div>'+
           '<div class="arrow-head"></div>'+
         '</div>';
@@ -2464,8 +2465,10 @@ function getPrintableGanttCSS() {
     '.arrow-label:focus{background:#fffdf0;outline:1px dashed #c0392b}'+
     '.arrow-line{position:absolute;left:6px;right:14px;bottom:3px;height:0;border-top:1.2px solid #111}'+
     '.arrow-head{position:absolute;right:6px;bottom:0;width:0;height:0;border-left:7px solid #111;border-top:4px solid transparent;border-bottom:4px solid transparent}'+
+    '.arrow-del{position:absolute;top:-2px;right:-2px;width:18px;height:18px;border-radius:50%;background:#c0392b;color:#fff;border:1px solid #fff;font-size:10px;font-weight:700;cursor:pointer;line-height:1;padding:0;pointer-events:auto;z-index:3;display:flex;align-items:center;justify-content:center}'+
+    '.arrow-del:hover{background:#e74c3c}'+
     '@page{size:landscape;margin:8mm}'+
-    '@media print{body{padding:0}.task-cell{cursor:default !important}.task-cell:hover{outline:none !important}}';
+    '@media print{body{padding:0}.task-cell{cursor:default !important}.task-cell:hover{outline:none !important}.arrow-del{display:none !important}}';
 }
 
 function openShareGanttDialog() {
@@ -2490,9 +2493,12 @@ function openShareGanttDialog() {
         '<button id="sg-share" style="background:#06c755;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">📷 画像で共有</button>'+
         '<button id="sg-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1;padding:4px 10px">×</button>'+
       '</div>'+
-      '<div style="padding:8px 18px;background:#fef9e7;border-bottom:1px solid #ddd;font-size:12px;color:#7d6608;flex-shrink:0">'+
-        '✏️ <strong>編集できる箇所</strong>：左の「タスク名」と矢印上の<span style="color:#c0392b;font-weight:700">赤い注記</span>はタップして書き換え可能。'+
-        '矢印は <strong>セル2回タップ</strong>（開始セル → 終了セル）で範囲を変更できます。'+
+      '<div style="padding:8px 18px;background:#fef9e7;border-bottom:1px solid #ddd;font-size:12px;color:#7d6608;flex-shrink:0;line-height:1.6">'+
+        '✏️ <strong>編集できる箇所</strong>：左の「タスク名」と矢印上の<span style="color:#c0392b;font-weight:700">赤い注記</span>はタップして書き換え可。'+
+        '<br>'+
+        '➡️ <strong>矢印を伸ばす</strong>：矢印より <strong>外側のセル</strong> をタップ → そこまで自動で伸びる。'+
+        '<strong>内側のセル</strong> をタップ → 近い方の端が縮む。'+
+        '矢印を消すには右の <strong>✕</strong> ボタン。'+
       '</div>'+
       '<div id="sg-scroll" style="padding:18px;overflow:auto;background:#e9ecef;flex:1">'+
         '<div id="sg-preview" style="background:#fff;padding:16px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:980px"><style>'+css+'</style>'+html+'</div>'+
@@ -2500,54 +2506,93 @@ function openShareGanttDialog() {
     '</div>';
   document.body.appendChild(ov);
 
-  // 矢印の範囲をセルクリックで再描画（開始セル→終了セル の2タップ式）
+  // 矢印の編集：1タップで自動的に伸ばす／縮める
   var preview = qs('#sg-preview');
-  var rowState = {}; // rowIdx -> first-clicked col index
+
+  function rebuildArrow(row, allCells, start, end, savedLabel) {
+    // 既存の矢印を消去
+    allCells.forEach(function(c){
+      c.classList.remove('range-start', 'in-arrow');
+      var aw = c.querySelector('.arrow-wrap');
+      if (aw) aw.remove();
+    });
+    if (start < 0 || end < 0) return; // 矢印を完全削除
+    // ラベルテキスト：保持されていればそれ、なければタスク名から
+    var labelText;
+    if (savedLabel != null) {
+      labelText = savedLabel;
+    } else {
+      var nameTxt = ((row.querySelector('.task-name-cell')||{}).textContent || '').trim();
+      labelText = nameTxt ? '・'+nameTxt : '・編集してください';
+    }
+    var span = end - start + 1;
+    var aw = document.createElement('div');
+    aw.className = 'arrow-wrap';
+    aw.style.width = (span*100)+'%';
+    aw.dataset.arrowRow = row.dataset.rowIdx;
+    aw.innerHTML = '<div class="arrow-label" contenteditable="true" spellcheck="false">'+escHtml(labelText)+'</div>'+
+      '<button class="arrow-del" title="矢印を削除" type="button">✕</button>'+
+      '<div class="arrow-line"></div>'+
+      '<div class="arrow-head"></div>';
+    allCells[start].appendChild(aw);
+    for (var i=start; i<=end; i++) allCells[i].classList.add('in-arrow');
+  }
+
   preview.addEventListener('click', function(e){
-    // 編集可能テキストや既存の矢印ラベルなどはスキップ
-    var label = e.target.closest('.arrow-label');
-    if (label) return;
-    var nameCell = e.target.closest('.task-name-cell');
-    if (nameCell) return;
+    // 矢印削除ボタン
+    var del = e.target.closest('.arrow-del');
+    if (del) {
+      e.stopPropagation();
+      var row = del.closest('tr');
+      var allCells = Array.from(row.querySelectorAll('.task-cell'));
+      rebuildArrow(row, allCells, -1, -1);
+      return;
+    }
+    // 編集可能テキストはスキップ
+    if (e.target.closest('.arrow-label')) return;
+    if (e.target.closest('.task-name-cell')) return;
     var cell = e.target.closest('.task-cell');
     if (!cell) return;
     var row = cell.closest('tr');
     if (!row) return;
-    var rowIdx = row.dataset.rowIdx;
     var allCells = Array.from(row.querySelectorAll('.task-cell'));
     var clickedIdx = allCells.indexOf(cell);
 
-    if (rowState[rowIdx] === undefined || rowState[rowIdx] === null) {
-      // 1回目タップ：開始セルとしてマーク
-      allCells.forEach(function(c){ c.classList.remove('range-start'); });
-      cell.classList.add('range-start');
-      rowState[rowIdx] = clickedIdx;
+    // 既存の矢印範囲を検出
+    var existingStart = -1, existingEnd = -1;
+    var existingLabel = null;
+    allCells.forEach(function(c, i){
+      if (c.classList.contains('in-arrow')) {
+        if (existingStart < 0) existingStart = i;
+        existingEnd = i;
+      }
+      var lbl = c.querySelector('.arrow-label');
+      if (lbl && existingLabel === null) existingLabel = lbl.textContent;
+    });
+
+    if (existingStart < 0) {
+      // 矢印なし → そのセル1日だけの矢印を作る
+      rebuildArrow(row, allCells, clickedIdx, clickedIdx);
+      return;
+    }
+    // 既存矢印あり：自動的に伸縮
+    if (clickedIdx < existingStart) {
+      // 左側へ伸ばす
+      rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
+    } else if (clickedIdx > existingEnd) {
+      // 右側へ伸ばす
+      rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
     } else {
-      // 2回目タップ：開始〜このセル の範囲で矢印を再描画
-      var start = Math.min(rowState[rowIdx], clickedIdx);
-      var end   = Math.max(rowState[rowIdx], clickedIdx);
-      // 既存の arrow-wrap を削除
-      allCells.forEach(function(c){
-        c.classList.remove('range-start', 'in-arrow');
-        var aw = c.querySelector('.arrow-wrap');
-        if (aw) aw.remove();
-      });
-      // 既存ラベル文字列の取得（前の矢印があった場合）
-      // ※ ラベルは消したので、デフォルト値はタスク名（左セルのテキスト）から取る
-      var nameTxt = (row.querySelector('.task-name-cell')||{}).textContent || '';
-      var defaultLabel = nameTxt ? '・'+nameTxt : '・編集してください';
-      // 矢印を再構築
-      var span = end - start + 1;
-      var aw = document.createElement('div');
-      aw.className = 'arrow-wrap';
-      aw.style.width = (span*100)+'%';
-      aw.dataset.arrowRow = rowIdx;
-      aw.innerHTML = '<div class="arrow-label" contenteditable="true" spellcheck="false">'+escHtml(defaultLabel)+'</div>'+
-        '<div class="arrow-line"></div>'+
-        '<div class="arrow-head"></div>';
-      allCells[start].appendChild(aw);
-      for (var i=start; i<=end; i++) allCells[i].classList.add('in-arrow');
-      rowState[rowIdx] = null;
+      // 矢印内をタップ：近いほうの端を縮める
+      var distToStart = clickedIdx - existingStart;
+      var distToEnd   = existingEnd - clickedIdx;
+      if (distToStart < distToEnd) {
+        // 開始側に近い → 開始を縮める
+        rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
+      } else {
+        // 終了側に近い（or 同じ）→ 終了を縮める
+        rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
+      }
     }
   });
 
