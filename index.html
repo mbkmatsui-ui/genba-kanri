@@ -889,6 +889,10 @@ body.is-admin .admin-only { display:flex; }
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="15" height="15"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
             写真追加
           </label>
+          <button class="btn btn-primary btn-sm" id="btn-share-gantt" style="gap:5px;font-size:12px;flex-shrink:0">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+            送信・印刷
+          </button>
         </div>
         <div style="display:flex;flex:1;overflow:hidden;min-height:0">
           <div class="gantt-container" style="flex:1;overflow:auto;-webkit-overflow-scrolling:touch">
@@ -2319,6 +2323,239 @@ function renderMaterialAlert() {
         });
       }
     });
+  });
+}
+
+// ===== 工程表の送信・印刷 =====
+function buildPrintableGanttHtml(p) {
+  var tasks = (data.tasks||[]).filter(function(t){ return t.projectId === p.id; });
+  // 表示日付範囲：プロジェクトの着工〜竣工。なければタスクから推定。
+  var startStr = p.startDate;
+  var endStr   = p.endDate;
+  if (!startStr || !endStr) {
+    var ts = tasks.map(function(t){return t.startDate;}).filter(Boolean).sort();
+    var te = tasks.map(function(t){return t.endDate;}).filter(Boolean).sort();
+    startStr = startStr || (ts[0] || todayStr());
+    endStr   = endStr   || (te[te.length-1] || addDays(startStr, 30));
+  }
+  // 余白を少し追加（前1日、後ろ少し多め）
+  startStr = addDays(startStr, -1);
+  endStr   = addDays(endStr, Math.max(7, Math.floor((new Date(endStr)-new Date(startStr))/86400000*0.3)));
+  var days = buildDays(startStr, endStr);
+
+  var DOW = ['日','月','火','水','木','金','土'];
+  var monthGroups = [];
+  days.forEach(function(d){
+    var m = d.slice(0,7);
+    var last = monthGroups[monthGroups.length-1];
+    if (!last || last.month !== m) monthGroups.push({month:m, count:1});
+    else last.count++;
+  });
+
+  var monthHdr = monthGroups.map(function(g){
+    var mp = g.month.split('-');
+    return '<th colspan="'+g.count+'" class="month-cell">'+parseInt(mp[1],10)+'月</th>';
+  }).join('');
+  var dowHdr = days.map(function(d){
+    var dow = new Date(d+'T00:00:00').getDay();
+    var cls = dow===0?'sun':dow===6?'sat':'';
+    return '<th class="dow-cell '+cls+'">'+DOW[dow]+'</th>';
+  }).join('');
+  var dateHdr = days.map(function(d){
+    var dow = new Date(d+'T00:00:00').getDay();
+    var cls = dow===0?'sun':dow===6?'sat':'';
+    return '<td class="date-cell '+cls+'">'+parseInt(d.split('-')[2],10)+'</td>';
+  }).join('');
+
+  // タスクをカテゴリでグループ化
+  var byCategory = [];
+  tasks.forEach(function(t){
+    var cat = (t.category||'工事').trim() || '工事';
+    var g = byCategory.find(function(x){ return x.cat === cat; });
+    if (!g) { g = {cat: cat, tasks: []}; byCategory.push(g); }
+    g.tasks.push(t);
+  });
+  // 開始日でソート
+  byCategory.forEach(function(g){
+    g.tasks.sort(function(a,b){
+      var sa = a.startDate||'9999-12-31', sb = b.startDate||'9999-12-31';
+      return sa<sb?-1:sa>sb?1:0;
+    });
+  });
+
+  var rows = '';
+  byCategory.forEach(function(g){
+    g.tasks.forEach(function(t, idx){
+      var startIdx = days.indexOf(t.startDate);
+      var endIdx   = days.indexOf(t.endDate);
+      if (startIdx < 0) startIdx = 0;
+      if (endIdx < 0) endIdx = startIdx;
+      var taskCells = days.map(function(d, i){
+        var dow = new Date(d+'T00:00:00').getDay();
+        var cls = dow===0?'sun':dow===6?'sat':'';
+        var content = '';
+        if (i === startIdx) {
+          var span = endIdx - startIdx + 1;
+          content = '<div class="arrow-wrap" style="width:'+(span*100)+'%">'+
+            '<div class="arrow-label">・'+escHtml(t.name)+'</div>'+
+            '<div class="arrow-line"></div>'+
+            '<div class="arrow-head"></div>'+
+          '</div>';
+        }
+        return '<td class="task-cell '+cls+'">'+content+'</td>';
+      }).join('');
+      var catCell = (idx===0)
+        ? '<td class="cat" rowspan="'+g.tasks.length+'">'+escHtml(g.cat)+'</td>'
+        : '';
+      rows += '<tr>'+catCell+taskCells+'</tr>';
+    });
+  });
+  // 空白の予備行（見栄え用に8行追加）
+  for (var fr=0; fr<8; fr++) {
+    rows += '<tr><td class="cat"></td>'+days.map(function(d){
+      var dow = new Date(d+'T00:00:00').getDay();
+      var cls = dow===0?'sun':dow===6?'sat':'';
+      return '<td class="task-cell '+cls+'"></td>';
+    }).join('')+'</tr>';
+  }
+
+  var sd = p.startDate||startStr;
+  var ed = p.endDate||endStr;
+  var sdLbl = sd ? (parseInt(sd.split('-')[1],10)+' 月  '+parseInt(sd.split('-')[2],10)+' 日') : '';
+  var edLbl = ed ? (parseInt(ed.split('-')[1],10)+' 月  '+parseInt(ed.split('-')[2],10)+' 日') : '';
+
+  return '<div class="print-page">'+
+    '<div class="print-header">'+
+      '<div class="print-name">現場名：'+escHtml(p.name)+'</div>'+
+      '<div class="print-period">工事期間：'+sdLbl+' 〜 '+edLbl+'</div>'+
+    '</div>'+
+    '<div class="print-sub">'+
+      '<div>工事名：'+escHtml(p.category||p.client||'')+'</div>'+
+      '<div class="print-warn">※天候上の都合により工程の変更・調整をさせて頂く場合がございます。</div>'+
+    '</div>'+
+    '<table class="print-gantt">'+
+      '<thead>'+
+        '<tr><th class="cat-hdr" rowspan="3">工事</th>'+monthHdr+'</tr>'+
+        '<tr>'+dowHdr+'</tr>'+
+        '<tr>'+dateHdr+'</tr>'+
+      '</thead>'+
+      '<tbody>'+rows+'</tbody>'+
+    '</table>'+
+  '</div>';
+}
+
+function getPrintableGanttCSS() {
+  return '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}'+
+    'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;color:#222;background:#fff;padding:18px;font-size:11px}'+
+    '.print-page{width:100%;background:#fff}'+
+    '.print-header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:1.5px solid #222;padding-bottom:6px;margin-bottom:8px}'+
+    '.print-name{font-size:20px;font-weight:700}'+
+    '.print-period{font-size:13px;font-weight:600;letter-spacing:.04em}'+
+    '.print-sub{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-size:11px;font-weight:700}'+
+    '.print-warn{color:#c0392b;font-weight:600}'+
+    '.print-gantt{width:100%;border-collapse:collapse;table-layout:fixed}'+
+    '.print-gantt th,.print-gantt td{border:0.6px solid #999;padding:0;text-align:center;vertical-align:middle;background:#fff;font-weight:400}'+
+    '.print-gantt thead th,.print-gantt thead td{background:#e9e9e9;font-weight:600;height:22px;font-size:11px}'+
+    '.print-gantt thead th.cat-hdr{background:#d8d8d8;width:70px;font-size:12px}'+
+    '.print-gantt thead th.month-cell{font-size:13px;font-weight:700;text-align:left;padding-left:6px;background:#fff;border-bottom:none}'+
+    '.print-gantt .dow-cell.sun,.print-gantt .date-cell.sun{background:#bdbdbd;color:#7c0000}'+
+    '.print-gantt .dow-cell.sat,.print-gantt .date-cell.sat{background:#cccccc;color:#1a3a8a}'+
+    '.print-gantt tbody td.cat{background:#f6f6f6;font-weight:700;text-align:center;padding:0 4px;font-size:12px;width:70px}'+
+    '.print-gantt tbody td.task-cell{height:22px;position:relative;background:#eafff0}'+
+    '.print-gantt tbody tr:nth-child(odd) td.task-cell{background:#f3fff7}'+
+    '.print-gantt tbody td.task-cell.sun{background:#bdbdbd}'+
+    '.print-gantt tbody td.task-cell.sat{background:#cccccc}'+
+    '.arrow-wrap{position:absolute;top:0;left:0;height:100%;display:flex;flex-direction:column;justify-content:center;pointer-events:none;z-index:2}'+
+    '.arrow-label{font-size:10px;color:#c0392b;font-weight:700;line-height:1.1;white-space:nowrap;padding-left:4px;text-align:left}'+
+    '.arrow-line{position:absolute;left:6px;right:14px;bottom:3px;height:0;border-top:1.2px solid #111}'+
+    '.arrow-head{position:absolute;right:6px;bottom:0;width:0;height:0;border-left:7px solid #111;border-top:4px solid transparent;border-bottom:4px solid transparent}'+
+    '@page{size:landscape;margin:8mm}'+
+    '@media print{body{padding:0}}';
+}
+
+function openShareGanttDialog() {
+  var p = data.projects.find(function(x){ return x.id === state.selectedProjectId; });
+  if (!p) { toast('案件が選択されていません','error'); return; }
+
+  var html = buildPrintableGanttHtml(p);
+  var css = getPrintableGanttCSS();
+
+  // 既存ダイアログがあれば閉じる
+  var prev = qs('#share-gantt-overlay');
+  if (prev) prev.remove();
+
+  var ov = document.createElement('div');
+  ov.id = 'share-gantt-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML =
+    '<div style="background:#fff;border-radius:12px;max-width:96vw;max-height:92vh;width:100%;display:flex;flex-direction:column;overflow:hidden">'+
+      '<div style="padding:14px 18px;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px;flex-shrink:0;background:#f5f5f5">'+
+        '<div style="font-weight:700;flex:1">工程表を送信・印刷</div>'+
+        '<button id="sg-print" style="background:#3d3d3d;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">🖨 印刷 / PDF保存</button>'+
+        '<button id="sg-share" style="background:#06c755;color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px">📷 画像で共有</button>'+
+        '<button id="sg-close" style="background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1;padding:4px 10px">×</button>'+
+      '</div>'+
+      '<div style="padding:18px;overflow:auto;background:#e9ecef;flex:1">'+
+        '<div id="sg-preview" style="background:#fff;padding:16px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:980px"><style>'+css+'</style>'+html+'</div>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(ov);
+
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  qs('#sg-close').addEventListener('click', function(){ ov.remove(); });
+
+  // 印刷：新ウィンドウで開いて自動的に印刷ダイアログ
+  qs('#sg-print').addEventListener('click', function(){
+    var w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされています。Safari の設定でブロックを解除してください'); return; }
+    w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+escHtml(p.name)+' 工程表</title><style>'+css+'</style></head><body>'+html+'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+    w.document.close();
+  });
+
+  // 画像で共有：html2canvas をオンデマンド読込
+  qs('#sg-share').addEventListener('click', function(){
+    qs('#sg-share').textContent = '⏳ 画像生成中…';
+    qs('#sg-share').disabled = true;
+    function captureAndShare() {
+      var preview = qs('#sg-preview');
+      window.html2canvas(preview, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(function(canvas){
+        canvas.toBlob(function(blob){
+          if (!blob) { toast('画像生成に失敗しました','error'); resetBtn(); return; }
+          var fileName = (p.name||'工程表').replace(/[\/\\:*?"<>|]/g,'_') + '_工程表.png';
+          var file = new File([blob], fileName, { type: 'image/png' });
+          // Web Share API（iOS Safari は対応）
+          if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: p.name+' 工程表' }).then(function(){ resetBtn(); }).catch(function(){ resetBtn(); });
+          } else {
+            // フォールバック：画像をダウンロード
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = fileName;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+            toast('画像をダウンロードしました。LINEに添付してください');
+            resetBtn();
+          }
+        }, 'image/png');
+      }).catch(function(err){
+        console.error('html2canvas error:', err);
+        toast('画像生成に失敗：'+(err.message||'unknown'),'error');
+        resetBtn();
+      });
+    }
+    function resetBtn(){
+      var b = qs('#sg-share');
+      if (b) { b.textContent = '📷 画像で共有'; b.disabled = false; }
+    }
+    if (window.html2canvas) {
+      captureAndShare();
+    } else {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+      s.onload = captureAndShare;
+      s.onerror = function(){ toast('html2canvas の読み込みに失敗','error'); resetBtn(); };
+      document.head.appendChild(s);
+    }
   });
 }
 
@@ -4323,6 +4560,8 @@ document.addEventListener('DOMContentLoaded', function(){
   // Buttons
   qs('#btn-add-project').addEventListener('click', function(){ openProjectModal(null); });
   qs('#btn-edit-project').addEventListener('click', function(){ openProjectModal(state.selectedProjectId); });
+  var shareBtn = qs('#btn-share-gantt');
+  if (shareBtn) shareBtn.addEventListener('click', function(){ openShareGanttDialog(); });
   // モバイル タブ切替
   document.querySelectorAll('.gantt-tab-btn[data-gtab]').forEach(function(btn){
     if(btn.id==='gantt-tab-add-btn'){
