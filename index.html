@@ -1624,6 +1624,34 @@ function toast(msg, type) {
   setTimeout(function(){ t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='.2s'; setTimeout(function(){t.remove();},200); },2500);
 }
 
+// 「元に戻す」ボタン付きトースト（押し間違い対策）
+function toastUndo(msg, undoFn, durationMs) {
+  var c=qs('#toast-container'), t=document.createElement('div');
+  t.className='toast info';
+  t.style.cssText='display:flex;align-items:center;gap:12px;min-width:240px';
+  var label=document.createElement('span');
+  label.textContent=msg;
+  label.style.flex='1';
+  t.appendChild(label);
+  var btn=document.createElement('button');
+  btn.textContent='元に戻す';
+  btn.style.cssText='background:none;border:1.5px solid currentColor;color:inherit;padding:4px 12px;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0';
+  var fired=false;
+  btn.addEventListener('click', function(){
+    if (fired) return;
+    fired=true;
+    try { undoFn(); } catch(e){ console.warn('undo failed:', e); }
+    t.remove();
+  });
+  t.appendChild(btn);
+  c.appendChild(t);
+  setTimeout(function(){
+    if (fired) return;
+    t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='.2s';
+    setTimeout(function(){ t.remove(); }, 200);
+  }, durationMs||6000);
+}
+
 // ===== Navigate =====
 function navigate(view, pid) {
   state.view=view;
@@ -2131,7 +2159,8 @@ function renderMaterialAlert() {
       actionHtml = '<button class="mal-order-btn" data-action="order" data-tid="' + t.id + '">発注済</button>';
     } else if (s === 'ordered') {
       badgeText = 'あと' + daysUntilStart + '日';
-      actionHtml = '<span style="font-size:11px;color:#f97316;font-weight:700;flex-shrink:0">発注済 ✓</span>';
+      // クリックで「未発注」へ戻せるボタンに変更（押し間違い対策）
+      actionHtml = '<button class="mal-order-btn" data-action="undo-order" data-tid="' + t.id + '" style="background:#f97316;color:#fff;border-color:#f97316" title="クリックで未発注に戻す">発注済 ✓</button>';
     } else if (s === 'active') {
       badgeText = '施工中';
       actionHtml = '<button class="mal-complete-btn" data-action="complete" data-tid="' + t.id + '">施工完了</button>';
@@ -2192,27 +2221,66 @@ function renderMaterialAlert() {
         task.materialOrdered = true;
         saveData(data);
         renderMaterialAlert();
+        toastUndo('「'+task.name+'」を発注済にしました', function(){
+          task.materialOrdered = false;
+          saveData(data);
+          renderMaterialAlert();
+        });
+      } else if (action === 'undo-order') {
+        // 「発注済 ✓」を再クリック → 未発注に戻す（即時）
+        task.materialOrdered = false;
+        saveData(data);
+        renderMaterialAlert();
+        toast('「'+task.name+'」を未発注に戻しました');
       } else if (action === 'complete') {
+        var prevStatus_c = task.status;
+        var prevProgress_c = task.progress;
         task.workCompleted = true;
         task.status = 'done';
         task.progress = 100;
         saveData(data);
         renderMaterialAlert();
         renderDashboard();
+        toastUndo('「'+task.name+'」を施工完了にしました', function(){
+          task.workCompleted = false;
+          task.status = prevStatus_c;
+          task.progress = prevProgress_c;
+          saveData(data);
+          renderMaterialAlert();
+          renderDashboard();
+        });
       } else if (action === 'report') {
         var ta = wrap.querySelector('textarea[data-tid="' + tid + '"]');
         var note = ta ? ta.value.trim() : '';
         if (!note) { alert((task.assignee||'担当者') + 'さん、理由を入力してから報告してください。'); return; }
+        var prevNote_r = task.completionNote;
         task.completionNote = note;
         saveData(data);
-        renderMaterialAlert(); // 点滅停止・完了済ボタン表示
+        renderMaterialAlert();
+        toastUndo('報告を送信しました', function(){
+          task.completionNote = prevNote_r;
+          saveData(data);
+          renderMaterialAlert();
+        });
       } else if (action === 'done') {
+        var prevStatus_d = task.status;
+        var prevProgress_d = task.progress;
+        var prevNote_d = task.completionNote;
         task.workCompleted = true;
         task.status = 'done';
         task.progress = 100;
         saveData(data);
         renderMaterialAlert();
         renderDashboard();
+        toastUndo('「'+task.name+'」を完了にしました', function(){
+          task.workCompleted = false;
+          task.status = prevStatus_d;
+          task.progress = prevProgress_d;
+          task.completionNote = prevNote_d;
+          saveData(data);
+          renderMaterialAlert();
+          renderDashboard();
+        });
       }
     });
   });
