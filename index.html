@@ -4361,53 +4361,9 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   qs('#btn-print-schedule').addEventListener('click', function(){ window.print(); });
 
-  // スケジュール スクロールでヘッダー表示切替
-  // ヒステリシス + requestAnimationFrame スロットルでガタつき防止
-  function setupScrollHide(containerSel, viewSel, hiddenClass){
-    var container = qs(containerSel);
-    var view = qs(viewSel);
-    if (!container || !view) return;
-    var ticking = false;
-    var lastY = 0;
-    var hidden = false;
-    var HIDE_AT = 120;  // 120px以上下スクロール → 隠す
-    var SHOW_AT = 40;   // 40px以下に戻る → 表示
-    var DELTA   = 12;   // 12px以上の方向転換のみ反応
-    var refY = 0;       // 反応の起点
-    container.addEventListener('scroll', function(){
-      var y = container.scrollTop;
-      if (ticking) { lastY = y; return; }
-      ticking = true;
-      requestAnimationFrame(function(){
-        var dy = y - refY;
-        if (!hidden) {
-          if (y > HIDE_AT && dy > DELTA) {
-            view.classList.add(hiddenClass);
-            hidden = true;
-            refY = y;
-          } else if (dy < -DELTA) {
-            refY = y;
-          }
-        } else {
-          if (y < SHOW_AT) {
-            view.classList.remove(hiddenClass);
-            hidden = false;
-            refY = y;
-          } else if (dy < -DELTA) {
-            view.classList.remove(hiddenClass);
-            hidden = false;
-            refY = y;
-          } else if (dy > DELTA) {
-            refY = y;
-          }
-        }
-        lastY = y;
-        ticking = false;
-      });
-    }, { passive: true });
-  }
-  setupScrollHide('.schedule-container', '#view-schedule', 'sched-header-hidden');
-  setupScrollHide('.gantt-container',    '#view-gantt',    'gantt-header-hidden');
+  // スクロールで自動的にヘッダーを隠す機能は無効化
+  // （ガタつき・震えの原因のため）
+  // 必要なら setupScrollHide を呼び出して再有効化できます。
 
   // ===== ズーム機能（スケジュール表・工程表）=====
   var ZOOM_MIN = 0.3, ZOOM_MAX = 3.0, ZOOM_STEP = 0.1;
