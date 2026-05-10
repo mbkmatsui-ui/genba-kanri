@@ -634,6 +634,13 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
+/* ===== 位置情報リンク（Google Maps） ===== */
+.project-location-link { color: var(--primary) !important; text-decoration: none; transition: color .15s; cursor: pointer; }
+.project-location-link:hover { color: #2563eb !important; text-decoration: underline; }
+.loc-map-link { color: var(--text); text-decoration: none; display: inline-flex; align-items: center; transition: color .15s; }
+.loc-map-link:hover { color: #2563eb; text-decoration: underline; }
+.loc-map-link:hover span { color: #2563eb !important; }
+
 /* ===== 作業員人数の未入力アラート ===== */
 .missing-workers-alert { background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%); border:1.5px solid #d97706; border-radius:10px; padding:12px 14px; margin-bottom:14px; box-shadow:0 2px 6px rgba(217,119,6,.15); }
 .missing-workers-alert.urgent { background:linear-gradient(135deg,#fee2e2 0%,#fca5a5 100%); border-color:#dc2626; animation: missingPulse 2s ease-in-out infinite; }
@@ -2555,7 +2562,10 @@ function renderDashboard() {
           (p.category?'<div style="margin-top:3px"><span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:rgba(255,255,255,.1);color:var(--text-sub)">'+p.category+'</span></div>':'')+
           '<div class="project-meta">'+
             '<span class="project-meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> '+p.client+'</span>'+
-            '<span class="project-meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg> '+p.location+'</span>'+
+            (p.location
+              ? '<a class="project-meta-item project-location-link" href="'+escHtml(googleMapsUrl(p.location))+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Google マップで開く"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg> '+escHtml(p.location)+'</a>'
+              : '<span class="project-meta-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg> —</span>'
+            )+
           '</div>'+
         '</div>'+
         '<span class="badge badge-'+(p.status==='completed'?'completed':'active')+'">'+projectStatusLabel(p.status)+'</span>'+
@@ -3248,6 +3258,12 @@ function archiveProject(p, fromDelete) {
 
 // ===== 完了案件の閲覧（読み取り専用）用ヘルパー =====
 // 現在表示すべき案件を返す（archived の場合はそちらを返す）
+// Google Maps URL を生成
+function googleMapsUrl(location) {
+  if (!location) return '';
+  return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(location);
+}
+
 function getViewingProject() {
   if (state.viewingArchivedId) {
     return (data.archivedProjects||[]).find(function(p){ return p.id === state.viewingArchivedId; });
@@ -3731,6 +3747,14 @@ function renderGanttOverview() {
   var statusColor2={active:'#2563eb',completed:'#16a34a',pending:'#94a3b8'};
   var sc=statusColor2[p.status]||'#94a3b8';
   var field=function(lbl,val){ return val?'<div class="proj-overview-field"><label>'+lbl+'</label><div class="val">'+val+'</div></div>':''; };
+  var locationField = p.location
+    ? '<div class="proj-overview-field"><label>所在地</label><div class="val">'+
+      '<a href="'+escHtml(googleMapsUrl(p.location))+'" target="_blank" rel="noopener" class="loc-map-link" title="Google マップで開く">'+
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13" style="vertical-align:middle;margin-right:3px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>'+
+        escHtml(p.location)+
+        '<span style="font-size:10px;color:var(--primary);margin-left:6px">📍 地図</span>'+
+      '</a></div></div>'
+    : '';
   wrap.innerHTML=
     '<div class="proj-overview-card">'+
       '<div class="proj-overview-banner" style="background:'+p.color+'"></div>'+
@@ -3745,7 +3769,7 @@ function renderGanttOverview() {
         '</div>'+
         '<div class="proj-overview-fields">'+
           field('発注者', p.client)+
-          field('所在地', p.location)+
+          locationField+
           field('管理者', p.manager)+
           field('担当者', p.assignee)+
           field('着工日', p.startDate?p.startDate.replace(/-/g,'/'): '')+
