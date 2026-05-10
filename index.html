@@ -3795,11 +3795,11 @@ function renderSchedule() {
         projTasks.forEach(function(task, idx){
           var taskColor = task.color || projColor;
           var stripe = document.createElement('div');
-          // タスクの日は濃い色で表示（opacity 0.95）
+          // タスクの日は濃い色で表示（opacity 0.95）。縦方向バー：start=上端 / end=下端
           stripe.style.cssText = 'position:absolute;left:'+(idx*stripeW)+'%;top:0;bottom:0;width:'+stripeW+'%;'+
             'background:'+taskColor+';opacity:.95;pointer-events:none;z-index:1;'+
-            (d===task.startDate?'border-left:2px solid '+taskColor+';':'')+
-            (d===task.endDate?'border-right:2px solid '+taskColor+';':'');
+            (d===task.startDate?'border-top:2px solid '+taskColor+';border-top-left-radius:5px;border-top-right-radius:5px;':'')+
+            (d===task.endDate?'border-bottom:2px solid '+taskColor+';border-bottom-left-radius:5px;border-bottom-right-radius:5px;':'');
           cell.appendChild(stripe);
           // タスク名を開始日に小さく表示（行高が十分なときのみ）
           if (d===task.startDate && rh>=16) {
