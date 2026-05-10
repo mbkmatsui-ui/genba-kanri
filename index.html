@@ -2705,7 +2705,13 @@ function openShareGanttDialog() {
   qs('#sg-print').addEventListener('click', function(){
     var w = window.open('', '_blank');
     if (!w) { alert('ポップアップがブロックされています。Safari の設定でブロックを解除してください'); return; }
-    w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+escHtml(p.name)+' 工程表</title><style>'+css+'</style></head><body>'+html+'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
+    // 印刷では編集UI（✕ボタン・hover/フォーカス枠）を完全非表示
+    var printOnlyCss = '\n.arrow-del{display:none !important}'+
+      '.task-cell{cursor:default !important}'+
+      '.task-cell:hover{outline:none !important}'+
+      '.task-cell.range-start{outline:none !important}'+
+      '[contenteditable="true"]:focus{outline:none !important;background:transparent !important}';
+    w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+escHtml(p.name)+' 工程表</title><style>'+css+printOnlyCss+'</style></head><body>'+html+'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
     w.document.close();
   });
 
@@ -2715,7 +2721,22 @@ function openShareGanttDialog() {
     qs('#sg-share').disabled = true;
     function captureAndShare() {
       var preview = qs('#sg-preview');
+      // 編集UI（✕削除ボタン・選択枠）を一時的に隠して撮影
+      var hideStyle = document.createElement('style');
+      hideStyle.id = 'sg-hide-ui';
+      hideStyle.textContent = '#sg-preview .arrow-del{display:none !important}'+
+        '#sg-preview .task-cell.range-start{outline:none !important}'+
+        '#sg-preview .task-cell:hover{outline:none !important}'+
+        '#sg-preview [contenteditable="true"]:focus{outline:none !important;background:transparent !important}';
+      document.head.appendChild(hideStyle);
+      // フォーカスを外して点滅キャレットも消す
+      try { if (document.activeElement && preview.contains(document.activeElement)) document.activeElement.blur(); } catch(e){}
+      function cleanup() {
+        var s = document.getElementById('sg-hide-ui');
+        if (s) s.remove();
+      }
       window.html2canvas(preview, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false }).then(function(canvas){
+        cleanup();
         canvas.toBlob(function(blob){
           if (!blob) { toast('画像生成に失敗しました','error'); resetBtn(); return; }
           var fileName = (p.name||'工程表').replace(/[\/\\:*?"<>|]/g,'_') + '_工程表.png';
@@ -2735,6 +2756,7 @@ function openShareGanttDialog() {
           }
         }, 'image/png');
       }).catch(function(err){
+        cleanup();
         console.error('html2canvas error:', err);
         toast('画像生成に失敗：'+(err.message||'unknown'),'error');
         resetBtn();
