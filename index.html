@@ -3838,7 +3838,10 @@ function getAssigneeList() {
     var a = (p.assignee||'').trim();
     if (a) set[a] = true;
   });
-  return Object.keys(set).sort(function(a,b){ return a.localeCompare(b,'ja'); });
+  // 「社長」を先頭、それ以外を五十音順
+  var others = Object.keys(set).filter(function(n){ return n !== '社長'; })
+    .sort(function(a,b){ return a.localeCompare(b,'ja'); });
+  return set['社長'] ? ['社長'].concat(others) : others;
 }
 
 function updateAssigneeSelectOptions() {
