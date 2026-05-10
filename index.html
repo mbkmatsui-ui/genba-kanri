@@ -3581,8 +3581,8 @@ var SCHED_CW = {week:28, month:20, quarter:12};
 function schedGetRange() {
   var projs = data.projects || [];
   var today = todayStr();
-  // 常に「30日前 〜 90日後」を最低範囲として確保
-  var minStart = addDays(today, -30);
+  // 常に「2ヶ月前 〜 90日後」を最低範囲として確保
+  var minStart = addDays(today, -62);
   var minEnd   = addDays(today, 90);
   if(!projs.length) return {start: minStart, end: minEnd};
   var starts = projs.map(function(p){return p.startDate;}).filter(Boolean).sort();
