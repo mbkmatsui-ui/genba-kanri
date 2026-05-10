@@ -1718,7 +1718,7 @@ function describeTaskDiff(o, n) {
 // ===== State =====
 var data = loadData();
 var isMobileDevice = window.innerWidth <= 768;
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyYear:null, schedMode:'project', schedAssignee:'' };
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyMonth:null, schedMode:'project', schedAssignee:'' };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -2158,11 +2158,8 @@ function renderDashboard() {
     bulkDelBtn.onclick=function(){
       if(!confirm('完了した工事 '+completedProjects.length+'件をすべて削除しますか？\n関連するタスクもすべて削除されます。')) return;
       var ids=completedProjects.map(function(p){return p.id;});
-      // 完了案件をアーカイブ
-      if(!data.archivedProjects) data.archivedProjects=[];
-      completedProjects.forEach(function(p){
-        data.archivedProjects.push({ id:p.id, name:p.name, client:p.client||'', location:p.location||'', startDate:p.startDate||'', endDate:p.endDate||'', archivedAt:todayStr() });
-      });
+      // 完了案件をアーカイブ（タスクと作業員人数も保存）
+      completedProjects.forEach(function(p){ archiveProject(p, true); });
       data.projects=data.projects.filter(function(p){return ids.indexOf(p.id)<0;});
       data.tasks=data.tasks.filter(function(t){return ids.indexOf(t.projectId)<0;});
       if(ids.indexOf(state.selectedProjectId)>=0) state.selectedProjectId=data.projects[0]&&data.projects[0].id;
@@ -2231,6 +2228,9 @@ function renderDashboard() {
       '<div class="project-card-footer">'+
         '<button class="btn btn-sm proj-del-btn" data-pid="'+p.id+'" style="background:#fee2e2;color:#b83c3c;border:none;padding:4px 7px;font-size:11px">削除</button>'+
         '<button class="btn btn-ghost btn-sm proj-edit-btn" data-pid="'+p.id+'" style="padding:4px 7px;font-size:11px">編集</button>'+
+        (p.status!=='completed'
+          ? '<button class="btn btn-sm proj-complete-btn" data-pid="'+p.id+'" style="background:#dcfce7;color:#15803d;border:none;padding:4px 7px;font-size:11px;font-weight:700">完了</button>'
+          : '')+
         '<button class="btn btn-primary btn-sm" style="padding:4px 9px;font-size:11px">工程表</button>'+
       '</div>';
     card.querySelector('.proj-del-btn').addEventListener('click', function(e){
@@ -2238,8 +2238,7 @@ function renderDashboard() {
       if(!confirm('「'+p.name+'」を削除しますか？\n関連するタスクもすべて削除されます。')) return;
       // 完了案件はアーカイブ
       if(p.status==='completed'){
-        if(!data.archivedProjects) data.archivedProjects=[];
-        data.archivedProjects.push({ id:p.id, name:p.name, client:p.client||'', location:p.location||'', startDate:p.startDate||'', endDate:p.endDate||'', archivedAt:todayStr() });
+        archiveProject(p, true);
       }
       data.projects = data.projects.filter(function(x){ return x.id !== p.id; });
       data.tasks = data.tasks.filter(function(t){ return t.projectId !== p.id; });
@@ -2253,6 +2252,21 @@ function renderDashboard() {
       e.stopPropagation();
       openProjectModal(p.id);
     });
+    var completeBtn = card.querySelector('.proj-complete-btn');
+    if (completeBtn) {
+      completeBtn.addEventListener('click', function(e){
+        e.stopPropagation();
+        if(!confirm('「'+p.name+'」を完了にしますか？\n過去物件一覧へ移動します。')) return;
+        archiveProject(p, false);
+        data.projects = data.projects.filter(function(x){ return x.id !== p.id; });
+        data.tasks = data.tasks.filter(function(t){ return t.projectId !== p.id; });
+        if(state.selectedProjectId === p.id) state.selectedProjectId = data.projects[0]&&data.projects[0].id;
+        saveData(data);
+        toast('完了しました。過去物件一覧へ移動しました');
+        renderSidebarProjects();
+        renderDashboard();
+      });
+    }
     card.addEventListener('click', function(){ navigate('gantt',p.id); });
     grid.appendChild(card);
   });
@@ -2845,25 +2859,66 @@ function printCompletedProjects(projects) {
   w.print();
 }
 
+// 案件をアーカイブ（完了履歴へ移動）
+// fromDelete=true なら「削除済」、false なら「完了」として保存
+function archiveProject(p, fromDelete) {
+  if(!data.archivedProjects) data.archivedProjects=[];
+  // この案件のタスクと作業員人数記録をスナップショット
+  var projTasks = (data.tasks||[]).filter(function(t){ return t.projectId===p.id; });
+  var taskNameById = {};
+  projTasks.forEach(function(t){ taskNameById[t.id] = t.name; });
+  var workerRecords = (data.education||[])
+    .filter(function(e){ return taskNameById[e.taskId]; })
+    .map(function(e){
+      return { date: e.date, taskName: taskNameById[e.taskId], count: e.count };
+    })
+    .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+  var taskSummary = projTasks.map(function(t){
+    return { name: t.name, startDate: t.startDate||'', endDate: t.endDate||'', status: t.status||'', supervisor: t.supervisor||'' };
+  });
+  var today = todayStr();
+  var completedMonth = today.substring(0,7); // YYYY-MM
+  data.archivedProjects.push({
+    id: p.id,
+    name: p.name,
+    client: p.client||'',
+    location: p.location||'',
+    assignee: p.assignee||'',
+    startDate: p.startDate||'',
+    endDate: p.endDate||'',
+    category: p.category||'',
+    color: p.color||'',
+    archivedAt: today,
+    completedMonth: completedMonth,
+    isFromDelete: !!fromDelete,
+    taskSummary: taskSummary,
+    workerRecords: workerRecords
+  });
+}
+
 function renderHistory() {
   // Combine archived + still-existing completed projects
   var archived = (data.archivedProjects || []).map(function(p){ return Object.assign({}, p, {isArchived:true}); });
   var active = data.projects.filter(function(p){ return p.status==='completed'; }).map(function(p){ return Object.assign({}, p, {isArchived:false}); });
-  // Merge, archived projects take priority if same id (shouldn't happen, but safety)
+  // Merge, archived projects take priority if same id
   var archivedIds = archived.map(function(p){ return p.id; });
   var combined = archived.concat(active.filter(function(p){ return archivedIds.indexOf(p.id)<0; }));
 
-  // Group by year (from endDate)
-  var yearMap = {};
+  // 月別グループ化（completedMonth が無ければ archivedAt or endDate から推定）
+  function getMonthKey(p) {
+    if (p.completedMonth) return p.completedMonth;
+    var src = p.archivedAt || p.endDate || '';
+    return src ? src.substring(0,7) : new Date().toISOString().substring(0,7);
+  }
+  var monthMap = {};
   combined.forEach(function(p){
-    var yr = p.endDate ? parseInt(p.endDate.substring(0,4),10) : 0;
-    if(!yr) yr = new Date().getFullYear();
-    if(!yearMap[yr]) yearMap[yr] = [];
-    yearMap[yr].push(p);
+    var mk = getMonthKey(p);
+    if(!monthMap[mk]) monthMap[mk] = [];
+    monthMap[mk].push(p);
   });
 
-  // Sort years descending for tabs, projects ascending by endDate within year
-  var years = Object.keys(yearMap).map(Number).sort(function(a,b){ return b-a; });
+  // 月キーを降順（新しい月が先頭）
+  var months = Object.keys(monthMap).sort(function(a,b){ return a<b?1:a>b?-1:0; });
 
   var tabsEl = qs('#history-year-tabs');
   var listEl = qs('#history-list');
@@ -2877,88 +2932,148 @@ function renderHistory() {
     return;
   }
 
-  // Default selected year = most recent
-  if(!state.historyYear || years.indexOf(state.historyYear)<0) state.historyYear = years[0];
+  // デフォルト選択 = 最新月
+  if(!state.historyMonth || months.indexOf(state.historyMonth)<0) state.historyMonth = months[0];
 
-  // Render year tabs
-  tabsEl.innerHTML = years.map(function(yr){
-    var cnt = yearMap[yr].length;
-    return '<button class="history-year-tab'+(yr===state.historyYear?' active':'')+'" data-yr="'+yr+'">'+yr+'年（'+cnt+'件）</button>';
+  // 月タブ
+  tabsEl.innerHTML = months.map(function(mk){
+    var mp = mk.split('-');
+    var label = mp[0]+'年'+parseInt(mp[1],10)+'月';
+    var cnt = monthMap[mk].length;
+    return '<button class="history-year-tab'+(mk===state.historyMonth?' active':'')+'" data-mk="'+mk+'">'+label+'（'+cnt+'件）</button>';
   }).join('');
   tabsEl.querySelectorAll('.history-year-tab').forEach(function(btn){
     btn.addEventListener('click', function(){
-      state.historyYear = Number(btn.dataset.yr);
+      state.historyMonth = btn.dataset.mk;
       renderHistory();
     });
   });
 
-  // Render list for selected year
-  var yearProjects = (yearMap[state.historyYear] || []).slice().sort(function(a,b){
-    return (a.endDate||'') < (b.endDate||'') ? -1 : (a.endDate||'') > (b.endDate||'') ? 1 : 0;
+  // 選択月の案件一覧（完了日昇順）
+  var monthProjects = (monthMap[state.historyMonth] || []).slice().sort(function(a,b){
+    var ka = a.archivedAt || a.endDate || '';
+    var kb = b.archivedAt || b.endDate || '';
+    return ka<kb?-1:ka>kb?1:0;
   });
 
-  var total = yearProjects.length;
+  var mp = state.historyMonth.split('-');
+  var monthLabel = mp[0]+'年'+parseInt(mp[1],10)+'月';
+  var total = monthProjects.length;
+  // 月の作業員人数合計
+  var totalWorkers = 0;
+  monthProjects.forEach(function(p){
+    (p.workerRecords||[]).forEach(function(r){ totalWorkers += (r.count||0); });
+  });
+
   listEl.innerHTML =
-    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
-      '<span style="font-size:13px;font-weight:700;color:var(--text-main)">'+state.historyYear+'年　完了工事一覧</span>'+
-      '<span style="font-size:12px;color:var(--text-muted)">計 <strong style="color:var(--primary);font-size:15px">'+total+'</strong> 件</span>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">'+
+      '<span style="font-size:13px;font-weight:700;color:var(--text-main)">'+monthLabel+'　完了工事一覧</span>'+
+      '<span style="font-size:12px;color:var(--text-muted)">計 <strong style="color:var(--primary);font-size:15px">'+total+'</strong> 件　・　作業員延べ <strong style="color:var(--primary);font-size:15px">'+totalWorkers+'</strong> 人</span>'+
     '</div>'+
     '<div style="border:1px solid var(--border);border-radius:var(--radius);overflow:hidden">'+
-    yearProjects.map(function(p, i){
+    monthProjects.map(function(p, i){
       var num = i + 1;
       var endFmt = p.endDate ? p.endDate.replace(/-/g,'/') : '—';
-      var badge = p.isArchived
+      var workersInProj = (p.workerRecords||[]).reduce(function(s,r){ return s+(r.count||0); }, 0);
+      var badge = p.isFromDelete
         ? '<span class="history-archived-badge">削除済</span>'
-        : '<span class="history-badge">完了中</span>';
+        : '<span class="history-badge">完了</span>';
       return '<div class="history-item">'+
         '<span class="history-num">No.'+(num<10?'0':'')+num+'</span>'+
         '<span class="history-name">'+escHtml(p.name)+'</span>'+
         badge+
         '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
-        '<span class="history-meta" style="margin-left:8px">完了 '+endFmt+'</span>'+
+        '<span class="history-meta" style="margin-left:8px">竣工 '+endFmt+'</span>'+
+        '<span class="history-meta" style="margin-left:8px;color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
       '</div>';
     }).join('')+
     '</div>';
 
   if(printBtn){
     printBtn.style.display = 'inline-flex';
-    printBtn.onclick = function(){ printHistory(state.historyYear, yearProjects); };
+    printBtn.onclick = function(){ printHistory(state.historyMonth, monthProjects); };
   }
 }
 
-function printHistory(year, projects) {
+function printHistory(monthKey, projects) {
   var d=new Date(); var dateLabel=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日';
-  var rows = projects.map(function(p, i){
+  var mp = monthKey.split('-');
+  var monthLabel = mp[0]+'年'+parseInt(mp[1],10)+'月';
+
+  // 月の合計作業員人数
+  var totalWorkers = 0;
+  projects.forEach(function(p){
+    (p.workerRecords||[]).forEach(function(r){ totalWorkers += (r.count||0); });
+  });
+
+  var summaryRows = projects.map(function(p, i){
     var num = i+1;
     var endFmt = p.endDate ? p.endDate.replace(/-/g,'/') : '—';
     var startFmt = p.startDate ? p.startDate.replace(/-/g,'/') : '—';
-    var status = p.isArchived ? '削除済' : '完了';
+    var status = p.isFromDelete ? '削除済' : '完了';
+    var pWorkers = (p.workerRecords||[]).reduce(function(s,r){ return s+(r.count||0); }, 0);
     return '<tr>'+
       '<td style="text-align:center;font-weight:bold">No.'+(num<10?'0':'')+num+'</td>'+
       '<td>'+escHtml(p.name)+'</td>'+
       '<td>'+escHtml(p.client||'')+'</td>'+
       '<td>'+startFmt+' 〜 '+endFmt+'</td>'+
       '<td style="text-align:center">'+status+'</td>'+
+      '<td style="text-align:center;font-weight:700">'+pWorkers+' 人</td>'+
     '</tr>';
   }).join('');
 
+  // 各案件の作業員人数明細
+  var detailHtml = projects.map(function(p, i){
+    var num = i+1;
+    var records = (p.workerRecords||[]).slice().sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+    var pWorkers = records.reduce(function(s,r){ return s+(r.count||0); }, 0);
+    if (records.length === 0) {
+      return '<div class="proj-detail"><h3>No.'+(num<10?'0':'')+num+'　'+escHtml(p.name)+'</h3>'+
+        '<div class="proj-meta">発注者：'+escHtml(p.client||'—')+'　／　工期：'+(p.startDate||'—').replace(/-/g,'/')+' 〜 '+(p.endDate||'—').replace(/-/g,'/')+'</div>'+
+        '<div class="no-records">作業員人数の記録なし</div>'+
+      '</div>';
+    }
+    var detailRows = records.map(function(r){
+      return '<tr><td>'+r.date.replace(/-/g,'/')+'</td><td>'+escHtml(r.taskName||'—')+'</td><td style="text-align:center">'+r.count+' 人</td></tr>';
+    }).join('');
+    return '<div class="proj-detail">'+
+      '<h3>No.'+(num<10?'0':'')+num+'　'+escHtml(p.name)+'</h3>'+
+      '<div class="proj-meta">発注者：'+escHtml(p.client||'—')+'　／　工期：'+(p.startDate||'—').replace(/-/g,'/')+' 〜 '+(p.endDate||'—').replace(/-/g,'/')+'　／　延べ作業員 <strong>'+pWorkers+' 人</strong></div>'+
+      '<table class="detail-table"><thead><tr><th style="width:110px">日付</th><th>タスク</th><th style="width:80px">作業員</th></tr></thead>'+
+      '<tbody>'+detailRows+'</tbody></table>'+
+    '</div>';
+  }).join('');
+
   var html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
-    '<title>'+year+'年 完了工事一覧</title>'+
+    '<title>'+monthLabel+' 完了工事一覧</title>'+
     '<style>'+
       'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;font-size:12px;color:#111;margin:24px;}'+
-      'h1{font-size:18px;margin-bottom:4px;}'+
+      'h1{font-size:20px;margin-bottom:4px;}'+
       '.meta{font-size:11px;color:#555;margin-bottom:16px;}'+
+      '.summary{margin-bottom:24px;}'+
       'table{width:100%;border-collapse:collapse;}'+
       'th{background:#2e2e2e;color:#fff;padding:7px 10px;text-align:left;font-size:11px;}'+
       'td{padding:7px 10px;border-bottom:1px solid #ddd;vertical-align:top;}'+
-      'tr:nth-child(even) td{background:#f7f7f7;}'+
-      '@media print{body{margin:12px;}}'+
+      '.summary tr:nth-child(even) td{background:#f7f7f7;}'+
+      'h2{font-size:14px;margin:24px 0 8px;padding-bottom:4px;border-bottom:1.5px solid #444;}'+
+      '.proj-detail{margin-bottom:18px;page-break-inside:avoid;}'+
+      '.proj-detail h3{font-size:13px;margin:14px 0 4px;background:#f3f4f6;padding:6px 10px;border-left:3px solid #444;}'+
+      '.proj-meta{font-size:11px;color:#555;margin-bottom:6px;padding-left:10px;}'+
+      '.detail-table{margin-left:14px;width:calc(100% - 14px);}'+
+      '.detail-table th{background:#666;font-size:10px;padding:5px 8px;}'+
+      '.detail-table td{padding:5px 8px;font-size:11px;}'+
+      '.detail-table tr:nth-child(even) td{background:#fafafa;}'+
+      '.no-records{font-size:11px;color:#888;padding:6px 10px;font-style:italic;}'+
+      '@media print{body{margin:12px;}.proj-detail{page-break-inside:avoid;}}'+
     '</style></head><body>'+
-    '<h1>'+year+'年　完了工事一覧</h1>'+
-    '<div class="meta">印刷日：'+dateLabel+'　／　合計：'+projects.length+'件</div>'+
-    '<table><thead><tr>'+
-      '<th style="width:60px">No.</th><th>工事名</th><th>発注者</th><th>工期</th><th style="width:60px">状態</th>'+
-    '</tr></thead><tbody>'+rows+'</tbody></table>'+
+    '<h1>'+monthLabel+'　完了工事一覧</h1>'+
+    '<div class="meta">印刷日：'+dateLabel+'　／　合計：'+projects.length+'件　／　延べ作業員：'+totalWorkers+' 人</div>'+
+    '<h2>工事サマリー</h2>'+
+    '<table class="summary"><thead><tr>'+
+      '<th style="width:60px">No.</th><th>工事名</th><th>発注者</th><th>工期</th><th style="width:60px">状態</th><th style="width:80px">作業員</th>'+
+    '</tr></thead><tbody>'+summaryRows+'</tbody></table>'+
+    '<h2>各工事の作業員人数明細</h2>'+
+    detailHtml+
     '</body></html>';
   var w=window.open('','_blank','width=900,height=600');
   w.document.write(html);
