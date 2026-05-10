@@ -1163,7 +1163,7 @@ body.is-admin .admin-only { display:flex; }
       <div class="form-group"><label>担当者</label>
         <select id="proj-assignee">
           <option value="">— 選択 —</option>
-          <option>厚之</option>
+          <option>社長</option>
           <option>汐海</option>
         </select>
       </div>
@@ -1263,7 +1263,7 @@ body.is-admin .admin-only { display:flex; }
         <div class="form-group"><label>現場主任</label>
           <select id="task-supervisor">
             <option value="">— 選択 —</option>
-            <option>厚之</option>
+            <option>社長</option>
             <option>汐海</option>
             <option>タクヤ</option>
             <option>金谷</option>
@@ -1421,9 +1421,15 @@ function ensureDataDefaults(d) {
     if(t.completionNote===undefined) t.completionNote='';
     if(t.manager===undefined) t.manager='';
     if(t.supervisor===undefined) t.supervisor='';
+    // 名前変更マイグレーション：厚之 → 社長
+    if(t.supervisor==='厚之') t.supervisor='社長';
+    if(t.assignee==='厚之') t.assignee='社長';
+    if(t.manager==='厚之') t.manager='社長';
   });
   d.projects.forEach(function(p){
     if(p.category===undefined) p.category='';
+    // 名前変更マイグレーション：厚之 → 社長
+    if(p.assignee==='厚之') p.assignee='社長';
   });
   return d;
 }
@@ -3827,7 +3833,7 @@ function scrollScheduleToToday() {
 // 案件ごとの期間はその案件の startDate / endDate を使う。
 function getAssigneeList() {
   // 既定の担当者は常にリストに含める（案件が無くても選べるように）
-  var set = { '厚之': true, '汐海': true };
+  var set = { '社長': true, '汐海': true };
   (data.projects||[]).forEach(function(p){
     var a = (p.assignee||'').trim();
     if (a) set[a] = true;
@@ -4439,10 +4445,10 @@ function addProjTaskRow(task){
       '<div><label>現場主任</label>'+
         '<select class="ptask-supervisor">'+
           '<option value="">— 選択 —</option>'+
-          ['厚之','汐海','タクヤ','金谷','植木','星野','川上'].map(function(n){ return '<option'+(task&&task.supervisor===n?' selected':'')+'>'+n+'</option>'; }).join('')+
-          '<option value="__manual__"'+(task&&task.supervisor&&['厚之','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?' selected':'')+'>✏️ 手動で入力する</option>'+
+          ['社長','汐海','タクヤ','金谷','植木','星野','川上'].map(function(n){ return '<option'+(task&&task.supervisor===n?' selected':'')+'>'+n+'</option>'; }).join('')+
+          '<option value="__manual__"'+(task&&task.supervisor&&['社長','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?' selected':'')+'>✏️ 手動で入力する</option>'+
         '</select>'+
-        '<input type="text" class="ptask-supervisor-manual" placeholder="現場主任名を入力" style="display:'+(task&&task.supervisor&&['厚之','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?'block':'none')+';margin-top:4px" value="'+(task&&task.supervisor&&['厚之','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?escHtml(task.supervisor):'')+'" />'+
+        '<input type="text" class="ptask-supervisor-manual" placeholder="現場主任名を入力" style="display:'+(task&&task.supervisor&&['社長','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?'block':'none')+';margin-top:4px" value="'+(task&&task.supervisor&&['社長','汐海','タクヤ','金谷','植木','星野','川上'].indexOf(task.supervisor)<0?escHtml(task.supervisor):'')+'" />'+
       '</div>'+
     '</div>';
 
@@ -4580,7 +4586,7 @@ function openTaskModal(id) {
   // 現場主任のセット（プリセット名以外なら手動入力欄へ）
   var supSel = qs('#task-supervisor');
   var supManual = qs('#task-supervisor-manual');
-  var presetSups = ['厚之','汐海','タクヤ','金谷','植木','星野','川上'];
+  var presetSups = ['社長','汐海','タクヤ','金谷','植木','星野','川上'];
   var supVal = task ? (task.supervisor||'') : '';
   if (supSel) {
     if (supVal && presetSups.indexOf(supVal) < 0) {
