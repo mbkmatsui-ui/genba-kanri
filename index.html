@@ -3580,14 +3580,22 @@ var SCHED_CW = {week:28, month:20, quarter:12};
 
 function schedGetRange() {
   var projs = data.projects || [];
-  if(!projs.length) return {start:todayStr(), end:addDays(todayStr(),90)};
+  var today = todayStr();
+  // 常に「30日前 〜 90日後」を最低範囲として確保
+  var minStart = addDays(today, -30);
+  var minEnd   = addDays(today, 90);
+  if(!projs.length) return {start: minStart, end: minEnd};
   var starts = projs.map(function(p){return p.startDate;}).filter(Boolean).sort();
   var ends   = projs.map(function(p){return p.endDate;}).filter(Boolean).sort();
-  // 日付がまだ設定されていない場合は今日を起点にデフォルト範囲
-  if (!starts.length && !ends.length) return {start:todayStr(), end:addDays(todayStr(),90)};
-  var s = starts.length ? starts[0] : todayStr();
-  var e = ends.length ? ends[ends.length-1] : addDays(s,90);
-  return { start: addDays(s,-7), end: addDays(e,14) };
+  if (!starts.length && !ends.length) return {start: minStart, end: minEnd};
+  var earliestStart = starts.length ? starts[0] : today;
+  var latestEnd     = ends.length ? ends[ends.length-1] : addDays(earliestStart, 90);
+  var rangeStart = addDays(earliestStart, -7);
+  var rangeEnd   = addDays(latestEnd, 14);
+  // 今日の前後に十分な余白を確保（過去にもスクロール可能に）
+  if (rangeStart > minStart) rangeStart = minStart;
+  if (rangeEnd   < minEnd)   rangeEnd   = minEnd;
+  return { start: rangeStart, end: rangeEnd };
 }
 
 function renderSchedule() {
@@ -3690,7 +3698,9 @@ function renderSchedule() {
 
     // Date label
     var dlbl=document.createElement('div');
-    var dateBg=isToday?'background:#2563eb;color:#fff;':
+    dlbl.dataset.date = d;
+    if (isToday) dlbl.classList.add('sched-today-cell');
+    var dateBg=isToday?'background:#fbbf24;color:#1a1a1a;font-weight:800;box-shadow:inset 0 0 0 2px #d97706;':
       isWkend?'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';':
       'background:var(--bg-surface);color:var(--text);';
     // 縮小時（rh が小さい）は日付と曜日を横並びにして重なりを防ぐ
@@ -3705,7 +3715,7 @@ function renderSchedule() {
       'height:'+rh+'px;box-sizing:border-box;'+dateBg;
     var dateFs = inlineLayout ? 10 : (rh>=24?13:10);
     var dowFs  = inlineLayout ? 9  : 9;
-    dlbl.innerHTML='<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
+    dlbl.innerHTML='<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+(isToday?' ★':'')+'</span>'+
       (hideDow ? '' : '<span style="font-size:'+dowFs+'px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
     grid.appendChild(dlbl);
 
@@ -3718,10 +3728,13 @@ function renderSchedule() {
       var projColor=proj.color||'#888';
       var cell=document.createElement('div');
       // 案件期間内：かなり薄い色（タスクのない日は背景のみ）
-      var cellBg=inRange?projColor+'15':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 今日の行は黄色オーバーレイで強調
+      var cellBg=isToday?'rgba(251,191,36,.30)':
+        inRange?projColor+'15':(isWkend?'rgba(220,60,60,.035)':'');
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
+        (isToday?'box-shadow:inset 0 0 0 1.5px rgba(217,119,6,.5);':'')+
         (inRange&&isStart?'border-top:3px solid '+projColor+';':'')+
         (inRange&&isEnd?'border-bottom:3px solid '+projColor+';':'');
       if(inRange){
@@ -3776,6 +3789,24 @@ function renderSchedule() {
   // ズームを適用（モバイルで縮小表示）
   qs('#sched-grid').style.zoom = state.schedZoom;
   qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
+  // 今日の行が一番上に来るようスクロール
+  scrollScheduleToToday();
+}
+
+// 全体スケジュールを今日の行までスクロール
+function scrollScheduleToToday() {
+  setTimeout(function(){
+    var container = qs('.schedule-container');
+    var todayCell = qs('#sched-grid [data-date="'+todayStr()+'"]');
+    if (container && todayCell) {
+      // ヘッダーの高さ分を考慮してスクロール
+      var rect = todayCell.getBoundingClientRect();
+      var contRect = container.getBoundingClientRect();
+      // sticky ヘッダーがあるので、その分（おおよそ82px）も差し引く
+      var headerH = 82;
+      container.scrollTop = container.scrollTop + (rect.top - contRect.top) - headerH - 2;
+    }
+  }, 50);
 }
 
 // ===== 担当者別 全体スケジュール =====
@@ -3941,7 +3972,8 @@ function renderScheduleByAssignee() {
 
     // 日付ラベル
     var dlbl = document.createElement('div');
-    var dateBg = isToday ? 'background:#2563eb;color:#fff;' :
+    dlbl.dataset.date = d;
+    var dateBg = isToday ? 'background:#fbbf24;color:#1a1a1a;font-weight:800;box-shadow:inset 0 0 0 2px #d97706;' :
       isWkend ? 'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';' :
       'background:var(--bg-surface);color:var(--text);';
     var inlineLayout = rh < 22;
@@ -3953,7 +3985,7 @@ function renderScheduleByAssignee() {
       'align-items:center;justify-content:center;'+
       'height:'+rh+'px;box-sizing:border-box;'+dateBg;
     var dateFs = inlineLayout ? 10 : (rh>=24?13:10);
-    dlbl.innerHTML = '<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
+    dlbl.innerHTML = '<span style="font-size:'+dateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+(isToday?' ★':'')+'</span>'+
       (hideDow ? '' : '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
     grid.appendChild(dlbl);
 
@@ -3966,10 +3998,13 @@ function renderScheduleByAssignee() {
       var col = proj.color || '#666';
       var cell = document.createElement('div');
       // 案件期間内：かなり薄い色（タスクのない日は背景のみ）
-      var cellBg = inRange ? col+'15' : (isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
+      // 今日の行は黄色オーバーレイで強調
+      var cellBg = isToday ? 'rgba(251,191,36,.30)' :
+        inRange ? col+'15' : (isWkend?'rgba(220,60,60,.035)':'');
       cell.style.cssText = 'border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
         'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
         (cellBg?'background:'+cellBg+';':'')+
+        (isToday?'box-shadow:inset 0 0 0 1.5px rgba(217,119,6,.5);':'')+
         (inRange&&isStart?'border-top:3px solid '+col+';':'')+
         (inRange&&isEnd?'border-bottom:3px solid '+col+';':'');
 
@@ -4018,6 +4053,8 @@ function renderScheduleByAssignee() {
 
   qs('#sched-grid').style.zoom = state.schedZoom;
   qs('#sched-zoom-pct').textContent = Math.round(state.schedZoom*100)+'%';
+  // 今日の行までスクロール
+  scrollScheduleToToday();
 }
 
 function _renderSchedule_OLD_UNUSED() {
