@@ -576,6 +576,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .history-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#dcfce7;color:#15803d;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-archived-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#64748b;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-empty { padding:32px;text-align:center;color:var(--text-muted);font-size:13px; }
+.history-del-btn { margin-left:10px;flex-shrink:0;background:#fee2e2;color:#b83c3c;border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
+.history-del-btn:hover { background:#fecaca;border-color:#b83c3c; }
 
 /* ===== ログイン画面 ===== */
 #login-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#2e2e2e 0%,#1a1a1a 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px; }
@@ -3130,6 +3132,9 @@ function renderHistory() {
         ? '<span class="history-archived-badge">削除済</span>'
         : '<span class="history-badge">完了</span>';
       var clickable = p.isArchived ? ' data-archived-pid="'+escHtml(p.id)+'" style="cursor:pointer"' : '';
+      var delBtn = p.isArchived
+        ? '<button class="history-del-btn" data-archived-pid="'+escHtml(p.id)+'" title="この履歴を削除">✕</button>'
+        : '';
       return '<div class="history-item"'+clickable+'>'+
         '<span class="history-num">No.'+(num<10?'0':'')+num+'</span>'+
         '<span class="history-name">'+escHtml(p.name)+'</span>'+
@@ -3137,16 +3142,45 @@ function renderHistory() {
         '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
         '<span class="history-meta" style="margin-left:8px">竣工 '+endFmt+'</span>'+
         '<span class="history-meta" style="margin-left:8px;color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
+        delBtn+
       '</div>';
     }).join('')+
     '</div>';
 
   // 削除済み案件のクリックで工程表閲覧
-  listEl.querySelectorAll('[data-archived-pid]').forEach(function(el){
-    el.addEventListener('click', function(){
+  listEl.querySelectorAll('.history-item[data-archived-pid]').forEach(function(el){
+    el.addEventListener('click', function(e){
+      // 削除ボタンがクリックされた場合は無視
+      if (e.target.closest('.history-del-btn')) return;
       var pid = el.dataset.archivedPid;
       startViewArchivedProject(pid);
       navigate('gantt');
+    });
+  });
+  // 履歴削除ボタン
+  listEl.querySelectorAll('.history-del-btn').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var pid = btn.dataset.archivedPid;
+      var arch = (data.archivedProjects||[]).find(function(p){ return p.id===pid; });
+      if (!arch) return;
+      var photoCount = (data.photos||[]).filter(function(ph){ return ph.projectId===pid; }).length;
+      var drawingCount = (data.drawings||[]).filter(function(dr){ return dr.projectId===pid; }).length;
+      var msg = '「'+arch.name+'」の履歴を完全に削除しますか？\n\n'+
+        '・タスク情報、作業員人数記録\n'+
+        (photoCount?'・写真 '+photoCount+'枚\n':'')+
+        (drawingCount?'・図面 '+drawingCount+'件\n':'')+
+        '\nすべて削除されます。この操作は取り消せません。';
+      if (!confirm(msg)) return;
+      // アーカイブから削除
+      data.archivedProjects = (data.archivedProjects||[]).filter(function(p){ return p.id!==pid; });
+      // 紐づく写真・図面・作業員人数記録も削除
+      data.photos = (data.photos||[]).filter(function(ph){ return ph.projectId!==pid; });
+      data.drawings = (data.drawings||[]).filter(function(dr){ return dr.projectId!==pid; });
+      // 教育データはタスクIDで紐付けなのでそのままでもOK（孤立するだけ）
+      saveData(data);
+      toast('履歴を削除しました');
+      renderHistory();
     });
   });
 
