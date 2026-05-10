@@ -657,6 +657,13 @@ body.viewing-archived #archived-banner { display: flex !important; }
 #offline-banner { position:fixed;top:0;left:0;right:0;background:#c08030;color:#fff;padding:6px 14px;text-align:center;font-size:12px;font-weight:700;z-index:998;display:none; }
 #offline-banner.show { display:block; }
 
+/* ===== 容量警告 ===== */
+#capacity-banner { position:fixed;top:0;left:0;right:0;padding:8px 14px;text-align:center;font-size:12px;font-weight:700;z-index:997; }
+#capacity-banner.hidden { display:none; }
+#capacity-banner.caution { background:#fef3c7;color:#92400e;border-bottom:2px solid #f59e0b; }
+#capacity-banner.critical { background:#fee2e2;color:#991b1b;border-bottom:2px solid #dc2626; animation: capacityPulse 1.6s ease-in-out infinite; }
+@keyframes capacityPulse { 0%,100% { box-shadow: 0 0 0 rgba(220,38,38,0); } 50% { box-shadow: 0 0 12px rgba(220,38,38,.5); } }
+
 /* 未ログイン時はアプリ本体を隠す */
 body.not-logged-in .app-header,
 body.not-logged-in .app-body,
@@ -726,6 +733,9 @@ body.is-admin .admin-only { display:flex; }
 
 <!-- オフライン通知 -->
 <div id="offline-banner">⚠️ オフライン中 — 他のメンバーへの変更は接続復旧後に反映されます</div>
+
+<!-- 容量警告バナー -->
+<div id="capacity-banner" class="hidden"></div>
 
 <header class="app-header">
   <button id="hamburger-btn" style="display:none;background:none;border:none;color:#f0f0f0;cursor:pointer;padding:6px;flex-shrink:0;line-height:0">
@@ -1498,6 +1508,65 @@ function loadData() {
 // 直前のデータ（差分検出用）
 var _prevDataSnapshot = null;
 
+// ===== データ容量監視 =====
+// RTDB の単一ノード上限は 32MB。安全マージンを取って警告閾値を設定。
+var CAPACITY_LIMIT_MB = 30;          // 実質的な上限（書込み失敗の前段）
+var CAPACITY_WARNING_RATIO = 0.50;   // 50% で情報通知
+var CAPACITY_CAUTION_RATIO = 0.75;   // 75% で注意喚起
+var CAPACITY_CRITICAL_RATIO = 0.90;  // 90% で警告バナー
+var _lastCapacityWarningLevel = '';  // 同じレベルの通知を連発しない
+var _lastCapacityWarningAt = 0;
+
+function getDataSizeBytes(d) {
+  try {
+    return new Blob([JSON.stringify(d||data)]).size;
+  } catch(e) {
+    try { return JSON.stringify(d||data).length * 2; } catch(_){ return 0; }
+  }
+}
+function getDataSizeMB(d) {
+  return getDataSizeBytes(d) / (1024*1024);
+}
+
+function checkCapacityAndWarn(d) {
+  var sizeMB = getDataSizeMB(d);
+  var ratio = sizeMB / CAPACITY_LIMIT_MB;
+  var level = '';
+  if (ratio >= CAPACITY_CRITICAL_RATIO) level = 'critical';
+  else if (ratio >= CAPACITY_CAUTION_RATIO) level = 'caution';
+  else if (ratio >= CAPACITY_WARNING_RATIO) level = 'warning';
+  // バナー表示
+  updateCapacityBanner(sizeMB, level);
+  // 同レベルなら 30分以内は通知しない（ノイズ抑制）
+  var now = Date.now();
+  if (level && (level !== _lastCapacityWarningLevel || (now - _lastCapacityWarningAt) > 1800000)) {
+    _lastCapacityWarningLevel = level;
+    _lastCapacityWarningAt = now;
+    if (level === 'critical') {
+      toast('⚠️ 容量がほぼ満杯です（'+sizeMB.toFixed(1)+'/'+CAPACITY_LIMIT_MB+'MB）。古い案件の写真を削除してください', 'error');
+    } else if (level === 'caution') {
+      toast('容量が '+Math.round(ratio*100)+'% に到達しました（'+sizeMB.toFixed(1)+'MB）', 'error');
+    } else if (level === 'warning') {
+      toast('データ容量：'+sizeMB.toFixed(1)+'MB／'+CAPACITY_LIMIT_MB+'MB（'+Math.round(ratio*100)+'%）');
+    }
+  }
+}
+
+function updateCapacityBanner(sizeMB, level) {
+  var bn = qs('#capacity-banner');
+  if (!bn) return;
+  if (level === 'critical' || level === 'caution') {
+    bn.classList.remove('hidden','caution','critical');
+    bn.classList.add(level==='critical'?'critical':'caution');
+    var pct = Math.round((sizeMB/CAPACITY_LIMIT_MB)*100);
+    bn.innerHTML = (level==='critical'?'🚨 ':'⚠️ ')+
+      '<strong>容量 '+pct+'%</strong>　'+sizeMB.toFixed(1)+' MB ／ '+CAPACITY_LIMIT_MB+' MB　'+
+      '— 完了履歴の古い案件の写真を削除してください';
+  } else {
+    bn.classList.add('hidden');
+  }
+}
+
 function saveData(d) {
   // ローカル保存（オフラインでも即座に反映）
   try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
@@ -1519,6 +1588,9 @@ function saveData(d) {
   }
   _suppressAuditNext = false;
   _prevDataSnapshot = JSON.parse(JSON.stringify(d));
+
+  // 容量チェック
+  try { checkCapacityAndWarn(d); } catch(e) {}
 
   // Firebase に書き込み（ログイン中のみ）
   if (currentUser) {
@@ -5533,6 +5605,8 @@ document.addEventListener('DOMContentLoaded', function(){
           }
           _lastSyncedAt = Date.now();
           if (_pendingWrites === 0) setSyncStatus('synced');
+          // クラウドからデータ取得時も容量チェック
+          try { checkCapacityAndWarn(data); } catch(e) {}
         }, function(err){
           // ルールで弾かれた → アクセス拒否
           if (err && err.code === 'PERMISSION_DENIED') {
