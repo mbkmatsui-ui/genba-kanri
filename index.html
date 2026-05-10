@@ -823,7 +823,7 @@ body.is-admin .admin-only { display:flex; }
           <div class="stat-card stat-card-clickable" data-filter="completed">
             <div class="stat-icon" style="background:#dcfce7"><svg viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></div>
             <div class="stat-value" id="stat-completed-projects">—</div>
-            <div class="stat-label">完了した工事</div>
+            <div class="stat-label">今月の完了工事</div>
           </div>
           <div class="stat-card stat-card-clickable" data-filter="active-tasks">
             <div class="stat-icon" style="background:#e0f2fe"><svg viewBox="0 0 24 24" fill="none" stroke="#0284c7" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></div>
@@ -2234,7 +2234,14 @@ function renderDashboard() {
   renderTodaySchedule();
   renderMaterialAlert();
   qs('#stat-active-projects').textContent=data.projects.filter(function(p){return p.status==='active';}).length;
-  qs('#stat-completed-projects').textContent=data.projects.filter(function(p){return p.status==='completed';}).length;
+  // 完了した工事 = 今月アーカイブされた完了案件のみ（月が変わるたびにリセット）
+  var thisMonth = todayStr().substring(0,7);
+  var thisMonthCompleted = (data.archivedProjects||[]).filter(function(p){
+    if (p.isFromDelete) return false;
+    var mk = p.completedMonth || (p.archivedAt ? p.archivedAt.substring(0,7) : '');
+    return mk === thisMonth;
+  }).length;
+  qs('#stat-completed-projects').textContent = thisMonthCompleted;
   qs('#stat-active-tasks').textContent=data.tasks.filter(function(t){return t.status==='active';}).length;
   qs('#stat-delayed-tasks').textContent=data.tasks.filter(function(t){return t.status!=='done'&&t.endDate<today;}).length;
 
@@ -2242,6 +2249,13 @@ function renderDashboard() {
   document.querySelectorAll('.stat-card-clickable').forEach(function(card){
     card.onclick=function(){
       var f=card.dataset.filter;
+      // 「今月の完了工事」をクリックしたら完了履歴へ
+      if (f === 'completed') {
+        // 今月のタブを開く
+        state.historyMonth = todayStr().substring(0,7);
+        navigate('history');
+        return;
+      }
       state.projectFilter=(state.projectFilter===f?null:f);
       renderDashboard();
     };
