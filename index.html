@@ -3618,9 +3618,16 @@ function renderSchedule() {
   var statusColMap={active:'#2563eb',completed:'#16a34a',pending:'#94a3b8'};
   var statusLblMap={active:'進行中',completed:'完了',pending:'計画中'};
 
-  var sortedProjects=data.projects.slice().sort(function(a,b){
+  // 削除済（archived）案件を左、アクティブ案件を右に並べる
+  var archivedProjs = (data.archivedProjects||[]).slice().sort(function(a,b){
+    return (a.startDate||'')<(b.startDate||'')?-1:(a.startDate||'')>(b.startDate||'')?1:0;
+  }).map(function(p){
+    return Object.assign({}, p, {isArchived:true, color: p.color || '#9ca3af', status: p.status || 'completed'});
+  });
+  var activeProjs = data.projects.slice().sort(function(a,b){
     return a.startDate<b.startDate?-1:a.startDate>b.startDate?1:0;
   });
+  var sortedProjects = archivedProjs.concat(activeProjs);
 
   var DATE_W=56; var PROJ_W=90;
   var HDR_H=82;
@@ -3645,7 +3652,8 @@ function renderSchedule() {
       'background:var(--bg-raised);'+
       'border-right:1px solid var(--border-lt);border-bottom:2px solid var(--border);'+
       'padding:5px 4px;height:'+HDR_H+'px;'+
-      'box-sizing:border-box;cursor:pointer;';
+      'box-sizing:border-box;'+(proj.isArchived?'cursor:default;':'cursor:pointer;')+
+      (proj.isArchived?'opacity:.45;':'');
     var tile=document.createElement('div');
     tile.style.cssText='background:'+proj.color+';border-radius:16px;'+
       'height:100%;padding:8px 7px 6px;display:flex;flex-direction:column;'+
@@ -3659,13 +3667,15 @@ function renderSchedule() {
     var badge=document.createElement('span');
     badge.style.cssText='font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;'+
       'background:rgba(255,255,255,.28);color:#fff;align-self:flex-start;flex-shrink:0;margin-top:3px;';
-    badge.textContent=statusLblMap[proj.status]||proj.status;
+    badge.textContent=proj.isArchived?'削除済':(statusLblMap[proj.status]||proj.status);
     tile.appendChild(nameDiv);
     tile.appendChild(badge);
     hdr.appendChild(tile);
-    hdr.addEventListener('click',function(){
-      state.selectedProjectId=proj.id; navigate('gantt');
-    });
+    if (!proj.isArchived) {
+      hdr.addEventListener('click',function(){
+        state.selectedProjectId=proj.id; navigate('gantt');
+      });
+    }
     grid.appendChild(hdr);
   });
 
@@ -3732,7 +3742,7 @@ function renderSchedule() {
       var cellBg=isToday?'rgba(251,191,36,.30)':
         inRange?projColor+'15':(isWkend?'rgba(220,60,60,.035)':'');
       cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
-        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
+        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;'+(proj.isArchived?'cursor:default;opacity:.40;':'cursor:pointer;')+
         (cellBg?'background:'+cellBg+';':'')+
         (isToday?'box-shadow:inset 0 0 0 1.5px rgba(217,119,6,.5);':'')+
         // 縦方向のバー：start = 上端、end = 下端
@@ -3774,9 +3784,11 @@ function renderSchedule() {
           }
         });
       }
-      cell.addEventListener('click',function(){
-        state.selectedProjectId=proj.id; navigate('gantt');
-      });
+      if (!proj.isArchived) {
+        cell.addEventListener('click',function(){
+          state.selectedProjectId=proj.id; navigate('gantt');
+        });
+      }
       grid.appendChild(cell);
     });
   });
