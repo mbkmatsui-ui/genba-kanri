@@ -3826,7 +3826,8 @@ function scrollScheduleToToday() {
 // 担当者を選択すると、その担当者の案件だけが上に並んだ表を表示。
 // 案件ごとの期間はその案件の startDate / endDate を使う。
 function getAssigneeList() {
-  var set = {};
+  // 既定の担当者は常にリストに含める（案件が無くても選べるように）
+  var set = { '厚之': true, '汐海': true };
   (data.projects||[]).forEach(function(p){
     var a = (p.assignee||'').trim();
     if (a) set[a] = true;
