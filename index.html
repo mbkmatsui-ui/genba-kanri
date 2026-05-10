@@ -632,6 +632,27 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
+/* ===== 完了済 案件の閲覧専用モード ===== */
+body.viewing-archived #btn-add-task,
+body.viewing-archived #btn-add-photo,
+body.viewing-archived #btn-add-photo-tab,
+body.viewing-archived #btn-edit-project,
+body.viewing-archived #btn-share-gantt,
+body.viewing-archived #btn-drawing-add,
+body.viewing-archived #btn-drawing-paste,
+body.viewing-archived #btn-drawing-add-zone,
+body.viewing-archived .btn[id^="detail-"],
+body.viewing-archived #detail-progress-range,
+body.viewing-archived #detail-note,
+body.viewing-archived .status-btn,
+body.viewing-archived .photo-thumb-del,
+body.viewing-archived .gantt-tab-add-btn,
+body.viewing-archived #gantt-tab-add-btn { pointer-events: none !important; opacity: .35 !important; }
+body.viewing-archived #archived-banner { display: flex !important; }
+#archived-banner { display:none; align-items:center; gap:10px; padding:8px 16px; background:#f1f5f9; color:#475569; border-bottom:2px solid #cbd5e1; font-size:12px; font-weight:700; flex-shrink:0; }
+#archived-banner .arch-back { margin-left:auto; padding:4px 10px; background:#475569; color:#fff; border:none; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; pointer-events:auto !important; opacity:1 !important; }
+#archived-banner .arch-back:hover { background:#334155; }
+
 /* ===== オフライン表示 ===== */
 #offline-banner { position:fixed;top:0;left:0;right:0;background:#c08030;color:#fff;padding:6px 14px;text-align:center;font-size:12px;font-weight:700;z-index:998;display:none; }
 #offline-banner.show { display:block; }
@@ -817,6 +838,11 @@ body.is-admin .admin-only { display:flex; }
 
     <!-- 工程表 -->
     <section id="view-gantt" class="view tab-gantt">
+      <div id="archived-banner">
+        <span>📁</span>
+        <span>完了済の工事を閲覧中（読み取り専用）</span>
+        <button class="arch-back" id="archived-back-btn">完了履歴に戻る</button>
+      </div>
       <div class="page-header">
         <div>
           <h2 id="gantt-project-name">工程表</h2>
@@ -1718,7 +1744,7 @@ function describeTaskDiff(o, n) {
 // ===== State =====
 var data = loadData();
 var isMobileDevice = window.innerWidth <= 768;
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyMonth:null, schedMode:'project', schedAssignee:'' };
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyMonth:null, schedMode:'project', schedAssignee:'', viewingArchivedId:null };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -1739,8 +1765,13 @@ function todayStr() { var d=new Date(); return d.getFullYear()+'-'+String(d.getM
 function genId(p) { return p+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
 function calcProgress(pid) {
   var ts=data.tasks.filter(function(t){return t.projectId===pid;});
+  // archived 案件の場合はそのスナップショットからタスクを取得
+  if(!ts.length) {
+    var arch = (data.archivedProjects||[]).find(function(p){ return p.id===pid; });
+    if (arch && arch.tasks) ts = arch.tasks;
+  }
   if(!ts.length) return 0;
-  return Math.round(ts.reduce(function(s,t){return s+t.progress;},0)/ts.length);
+  return Math.round(ts.reduce(function(s,t){return s+(t.progress||0);},0)/ts.length);
 }
 function statusColor(s) { return {done:'#16a34a',active:'#2563eb',pending:'#94a3b8',delay:'#dc2626'}[s]||'#94a3b8'; }
 function projectStatusLabel(s) { return {active:'進行中',completed:'完了',pending:'計画中'}[s]||s; }
@@ -1780,8 +1811,13 @@ function toastUndo(msg, undoFn, durationMs) {
 
 // ===== Navigate =====
 function navigate(view, pid) {
+  // gantt 以外に遷移する場合は archived 閲覧を終了
+  if (view !== 'gantt' && state.viewingArchivedId) {
+    stopViewArchivedProject();
+  }
   state.view=view;
-  if(pid!==undefined) state.selectedProjectId=pid;
+  // viewingArchivedId が設定されている場合は selectedProjectId を上書きしない
+  if(pid!==undefined && !state.viewingArchivedId) state.selectedProjectId=pid;
   qsa('.view').forEach(function(v){v.classList.remove('active');});
   qs('#view-'+view).classList.add('active');
   qs('#view-gantt').classList.remove('gantt-header-hidden');
@@ -2876,6 +2912,8 @@ function archiveProject(p, fromDelete) {
   var taskSummary = projTasks.map(function(t){
     return { name: t.name, startDate: t.startDate||'', endDate: t.endDate||'', status: t.status||'', supervisor: t.supervisor||'' };
   });
+  // 完全なタスク情報を保存（後で工程表として閲覧するため）
+  var fullTasks = projTasks.map(function(t){ return JSON.parse(JSON.stringify(t)); });
   var today = todayStr();
   var completedMonth = today.substring(0,7); // YYYY-MM
   data.archivedProjects.push({
@@ -2892,8 +2930,49 @@ function archiveProject(p, fromDelete) {
     completedMonth: completedMonth,
     isFromDelete: !!fromDelete,
     taskSummary: taskSummary,
+    tasks: fullTasks,           // 工程表閲覧用の完全タスク
     workerRecords: workerRecords
   });
+  // 注：写真・図面は data.photos / data.drawings に残るので、
+  //     archivedId === pid でフィルタすれば閲覧可能
+}
+
+// ===== 完了案件の閲覧（読み取り専用）用ヘルパー =====
+// 現在表示すべき案件を返す（archived の場合はそちらを返す）
+function getViewingProject() {
+  if (state.viewingArchivedId) {
+    return (data.archivedProjects||[]).find(function(p){ return p.id === state.viewingArchivedId; });
+  }
+  return data.projects.find(function(p){ return p.id === state.selectedProjectId; });
+}
+// 現在表示すべきタスク一覧
+function getViewingTasks() {
+  if (state.viewingArchivedId) {
+    var arch = (data.archivedProjects||[]).find(function(p){ return p.id === state.viewingArchivedId; });
+    return arch ? (arch.tasks || []) : [];
+  }
+  return (data.tasks||[]).filter(function(t){ return t.projectId === state.selectedProjectId; });
+}
+// 指定 ID のタスク（archived 含む）
+function getViewingTaskById(tid) {
+  if (state.viewingArchivedId) {
+    var arch = (data.archivedProjects||[]).find(function(p){ return p.id === state.viewingArchivedId; });
+    if (arch && arch.tasks) return arch.tasks.find(function(t){ return t.id === tid; });
+  }
+  return (data.tasks||[]).find(function(t){ return t.id === tid; });
+}
+// archived 案件の閲覧を開始
+function startViewArchivedProject(archivedId) {
+  state.viewingArchivedId = archivedId;
+  state.selectedProjectId = archivedId; // 写真・図面は data.photos / data.drawings の projectId で検索
+  state.selectedTaskId = null;
+  document.body.classList.add('viewing-archived');
+}
+// archived 閲覧を終了
+function stopViewArchivedProject() {
+  if (!state.viewingArchivedId) return;
+  state.viewingArchivedId = null;
+  document.body.classList.remove('viewing-archived');
 }
 
 function renderHistory() {
@@ -2978,7 +3057,8 @@ function renderHistory() {
       var badge = p.isFromDelete
         ? '<span class="history-archived-badge">削除済</span>'
         : '<span class="history-badge">完了</span>';
-      return '<div class="history-item">'+
+      var clickable = p.isArchived ? ' data-archived-pid="'+escHtml(p.id)+'" style="cursor:pointer"' : '';
+      return '<div class="history-item"'+clickable+'>'+
         '<span class="history-num">No.'+(num<10?'0':'')+num+'</span>'+
         '<span class="history-name">'+escHtml(p.name)+'</span>'+
         badge+
@@ -2988,6 +3068,15 @@ function renderHistory() {
       '</div>';
     }).join('')+
     '</div>';
+
+  // 削除済み案件のクリックで工程表閲覧
+  listEl.querySelectorAll('[data-archived-pid]').forEach(function(el){
+    el.addEventListener('click', function(){
+      var pid = el.dataset.archivedPid;
+      startViewArchivedProject(pid);
+      navigate('gantt');
+    });
+  });
 
   if(printBtn){
     printBtn.style.display = 'inline-flex';
@@ -3269,13 +3358,13 @@ function openPhotoChoice() {
 var CELL_W = {week:28, month:22, quarter:14};
 
 function getRange() {
-  var p=data.projects.find(function(p){return p.id===state.selectedProjectId;});
+  var p = getViewingProject();
   if(!p) return {start:todayStr(), end:addDays(todayStr(),90)};
   // 案件に着工日・竣工日が無い場合はタスクの日付から推定、無ければ今日基準
   var s = p.startDate;
   var e = p.endDate;
   if (!s || !e) {
-    var projTasks = (data.tasks||[]).filter(function(t){ return t.projectId===p.id; });
+    var projTasks = getViewingTasks();
     var taskStarts = projTasks.map(function(t){return t.startDate;}).filter(Boolean).sort();
     var taskEnds   = projTasks.map(function(t){return t.endDate;}).filter(Boolean).sort();
     if (!s) s = taskStarts.length ? taskStarts[0] : todayStr();
@@ -3291,11 +3380,11 @@ function buildDays(start, end) {
 }
 
 function renderGanttOverview() {
-  var p=data.projects.find(function(px){return px.id===state.selectedProjectId;});
+  var p = getViewingProject();
   var wrap=qs('#gantt-tab-overview'); if(!wrap) return;
   if(!p){ wrap.innerHTML='<div style="padding:24px;color:var(--text-muted);font-size:13px">案件を選択してください</div>'; return; }
   var prog=calcProgress(p.id);
-  var tasks=data.tasks.filter(function(t){return t.projectId===p.id;});
+  var tasks = getViewingTasks();
   var doneCnt=tasks.filter(function(t){return t.status==='done';}).length;
   var statusLbl={active:'進行中',completed:'完了',pending:'計画中'};
   var statusColor2={active:'#2563eb',completed:'#16a34a',pending:'#94a3b8'};
@@ -3524,15 +3613,26 @@ function switchGanttTab(tab) {
 }
 
 function renderGantt() {
-  var p=data.projects.find(function(p){return p.id===state.selectedProjectId;});
+  var p = getViewingProject();
   if(!p){ qs('#gantt-project-name').textContent='プロジェクトを選択'; return; }
-  qs('#gantt-project-name').textContent=p.name;
-  qs('#gantt-project-select').value=p.id;
+  qs('#gantt-project-name').textContent=p.name + (state.viewingArchivedId ? '（完了済 / 閲覧専用）' : '');
+  // selectセレクトに archived id があるとは限らないので空にする
+  var sel = qs('#gantt-project-select');
+  if (state.viewingArchivedId) {
+    if (!sel.querySelector('option[value="'+p.id+'"]')) {
+      var o = document.createElement('option');
+      o.value = p.id; o.textContent = p.name+' (完了)';
+      sel.insertBefore(o, sel.firstChild);
+    }
+    sel.value = p.id;
+  } else {
+    sel.value = p.id;
+  }
 
   var range=getRange(); var days=buildDays(range.start,range.end);
   var rh=CELL_W[state.ganttScale]; // row height per day
   var today=todayStr();
-  var tasks=data.tasks.filter(function(t){return t.projectId===state.selectedProjectId;});
+  var tasks = getViewingTasks();
   var DOW=['日','月','火','水','木','金','土'];
   var DATE_W=56; var TASK_W=110;
 
@@ -3667,7 +3767,7 @@ function selectTask(id) {
 // ===== Detail Panel =====
 function renderDetail() {
   var panel=qs('#task-detail-panel');
-  var task=data.tasks.find(function(t){return t.id===state.selectedTaskId;});
+  var task = getViewingTaskById(state.selectedTaskId);
   if(!task){ panel.classList.add('hidden'); return; }
   panel.classList.remove('hidden');
   qs('#detail-task-name').textContent=task.name;
@@ -4929,6 +5029,11 @@ document.addEventListener('DOMContentLoaded', function(){
   // Buttons
   qs('#btn-add-project').addEventListener('click', function(){ openProjectModal(null); });
   qs('#btn-edit-project').addEventListener('click', function(){ openProjectModal(state.selectedProjectId); });
+  var archBackBtn = qs('#archived-back-btn');
+  if (archBackBtn) archBackBtn.addEventListener('click', function(){
+    stopViewArchivedProject();
+    navigate('history');
+  });
   var shareBtn = qs('#btn-share-gantt');
   if (shareBtn) shareBtn.addEventListener('click', function(){ openShareGanttDialog(); });
   // モバイル タブ切替
