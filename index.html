@@ -3618,7 +3618,7 @@ function renderSchedule() {
   var statusColMap={active:'#2563eb',completed:'#16a34a',pending:'#94a3b8'};
   var statusLblMap={active:'進行中',completed:'完了',pending:'計画中'};
 
-  // 削除済（archived）案件を左、アクティブ案件を右に並べる
+  // アクティブ案件を左、削除済（archived）案件を右に並べる
   var archivedProjs = (data.archivedProjects||[]).slice().sort(function(a,b){
     return (a.startDate||'')<(b.startDate||'')?-1:(a.startDate||'')>(b.startDate||'')?1:0;
   }).map(function(p){
@@ -3627,7 +3627,7 @@ function renderSchedule() {
   var activeProjs = data.projects.slice().sort(function(a,b){
     return a.startDate<b.startDate?-1:a.startDate>b.startDate?1:0;
   });
-  var sortedProjects = archivedProjs.concat(activeProjs);
+  var sortedProjects = activeProjs.concat(archivedProjs);
 
   var DATE_W=56; var PROJ_W=90;
   var HDR_H=82;
