@@ -3006,22 +3006,6 @@ function printHistory(monthKey, projects) {
     (p.workerRecords||[]).forEach(function(r){ totalWorkers += (r.count||0); });
   });
 
-  var summaryRows = projects.map(function(p, i){
-    var num = i+1;
-    var endFmt = p.endDate ? p.endDate.replace(/-/g,'/') : '—';
-    var startFmt = p.startDate ? p.startDate.replace(/-/g,'/') : '—';
-    var status = p.isFromDelete ? '削除済' : '完了';
-    var pWorkers = (p.workerRecords||[]).reduce(function(s,r){ return s+(r.count||0); }, 0);
-    return '<tr>'+
-      '<td style="text-align:center;font-weight:bold">No.'+(num<10?'0':'')+num+'</td>'+
-      '<td>'+escHtml(p.name)+'</td>'+
-      '<td>'+escHtml(p.client||'')+'</td>'+
-      '<td>'+startFmt+' 〜 '+endFmt+'</td>'+
-      '<td style="text-align:center">'+status+'</td>'+
-      '<td style="text-align:center;font-weight:700">'+pWorkers+' 人</td>'+
-    '</tr>';
-  }).join('');
-
   // 各案件の作業員人数明細
   var detailHtml = projects.map(function(p, i){
     var num = i+1;
@@ -3068,11 +3052,6 @@ function printHistory(monthKey, projects) {
     '</style></head><body>'+
     '<h1>'+monthLabel+'　完了工事一覧</h1>'+
     '<div class="meta">印刷日：'+dateLabel+'　／　合計：'+projects.length+'件　／　延べ作業員：'+totalWorkers+' 人</div>'+
-    '<h2>工事サマリー</h2>'+
-    '<table class="summary"><thead><tr>'+
-      '<th style="width:60px">No.</th><th>工事名</th><th>発注者</th><th>工期</th><th style="width:60px">状態</th><th style="width:80px">作業員</th>'+
-    '</tr></thead><tbody>'+summaryRows+'</tbody></table>'+
-    '<h2>各工事の作業員人数明細</h2>'+
     detailHtml+
     '</body></html>';
   var w=window.open('','_blank','width=900,height=600');
