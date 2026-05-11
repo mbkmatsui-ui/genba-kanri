@@ -634,6 +634,54 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
+/* ===== マイカレンダー ===== */
+#view-mycal { padding: 12px 20px 20px; overflow: auto; }
+.mycal-toolbar { display:flex; align-items:center; gap:10px; margin: 4px 0 12px; flex-wrap: wrap; }
+.mycal-nav-btn { width:34px; height:34px; border:1px solid var(--border); background:#fff; border-radius:6px; font-size:20px; cursor:pointer; color:var(--text); line-height:1; padding:0; }
+.mycal-nav-btn:hover { background:var(--bg-hover); }
+.mycal-month-label { font-size:18px; font-weight:700; min-width:120px; text-align:center; }
+.mycal-today-btn { padding:6px 12px; border:1px solid var(--border); background:#fff; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; }
+.mycal-today-btn:hover { background:var(--bg-hover); }
+.mycal-legend { display:flex; gap:14px; font-size:11px; color:var(--text-sub); margin-left:auto; flex-wrap:wrap; }
+.mycal-leg-dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+
+.mycal-grid-wrap { border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#fff; }
+.mycal-dow-header { display:grid; grid-template-columns:repeat(7, 1fr); background:#f3f4f6; border-bottom:1px solid var(--border); }
+.mycal-dow-header .dow { padding:8px 6px; text-align:center; font-size:12px; font-weight:700; color:var(--text-sub); border-right:1px solid var(--border-lt); }
+.mycal-dow-header .dow:last-child { border-right:none; }
+.mycal-dow-header .dow.sun { color:#dc2626; }
+.mycal-dow-header .dow.sat { color:#2563eb; }
+.mycal-grid { display:grid; grid-template-columns:repeat(7, 1fr); grid-auto-rows: minmax(110px, auto); }
+.mycal-day { border-right:1px solid var(--border-lt); border-bottom:1px solid var(--border-lt); padding:4px 4px 6px; position:relative; cursor:pointer; transition:background .12s; min-height:110px; }
+.mycal-day:nth-child(7n) { border-right:none; }
+.mycal-day:hover { background:#f9fafb; }
+.mycal-day.other-month { background:#fafafa; color:#cbd5e1; }
+.mycal-day.is-today .mycal-day-num { background:#000; color:#fff; }
+.mycal-day-num { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; border-radius:50%; font-size:13px; font-weight:700; padding:0 5px; }
+.mycal-day.is-sun .mycal-day-num { color:#dc2626; }
+.mycal-day.is-sat .mycal-day-num { color:#2563eb; }
+.mycal-events { display:flex; flex-direction:column; gap:2px; margin-top:3px; }
+.mycal-evt { font-size:10px; color:#fff; padding:2px 5px; border-radius:3px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.08); }
+.mycal-evt:hover { opacity:.85; }
+.mycal-evt.continued { border-radius:0; }
+.mycal-evt.start { border-radius:3px 0 0 3px; }
+.mycal-evt.end { border-radius:0 3px 3px 0; }
+.mycal-evt.middle { border-radius:0; }
+.mycal-evt.auto { opacity:.85; }
+.mycal-color-picker { display:flex; gap:8px; padding:6px 0; }
+.mycal-color-opt { width:30px; height:30px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:transform .1s; }
+.mycal-color-opt:hover { transform:scale(1.1); }
+.mycal-color-opt.selected { border-color:#1a1a1a; }
+@media (max-width: 768px) {
+  #view-mycal { padding: 8px 10px 80px; }
+  .mycal-grid { grid-auto-rows: minmax(72px, auto); }
+  .mycal-day { min-height: 72px; padding:2px 2px 4px; }
+  .mycal-day-num { font-size:11px; min-width:18px; height:18px; }
+  .mycal-evt { font-size:9px; padding:1px 3px; }
+  .mycal-legend { font-size:10px; }
+  .mycal-toolbar { gap:6px; }
+}
+
 /* ===== 位置情報リンク（Google Maps） ===== */
 .project-location-link { color: var(--primary) !important; text-decoration: none; transition: color .15s; cursor: pointer; }
 .project-location-link:hover { color: #2563eb !important; text-decoration: underline; }
@@ -816,6 +864,10 @@ body.is-admin .admin-only { display:flex; }
       <a data-view="history">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>
         完了履歴
+      </a>
+      <a data-view="mycal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2M8 18h2m4 0h2"/></svg>
+        マイカレンダー
       </a>
       <a data-view="audit">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
@@ -1165,6 +1217,38 @@ body.is-admin .admin-only { display:flex; }
     </section>
 
     <!-- 編集履歴 -->
+    <!-- マイカレンダー -->
+    <section id="view-mycal" class="view">
+      <div class="page-header">
+        <div>
+          <h2>マイカレンダー</h2>
+          <div class="page-subtitle">あなた専用のカレンダー（端末内に保存・他のメンバーには共有されません）</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" id="btn-mycal-add">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="14" height="14"><path d="M12 5v14M5 12h14"/></svg>
+            予定を追加
+          </button>
+        </div>
+      </div>
+      <div class="mycal-toolbar">
+        <button class="mycal-nav-btn" id="mycal-prev">‹</button>
+        <span class="mycal-month-label" id="mycal-month-label">—</span>
+        <button class="mycal-nav-btn" id="mycal-next">›</button>
+        <button class="mycal-today-btn" id="mycal-today">今日</button>
+        <div class="mycal-legend">
+          <span><span class="mycal-leg-dot" style="background:#3b82f6"></span>個人予定</span>
+          <span><span class="mycal-leg-dot" style="background:#f59e0b"></span>現場タスク（自動）</span>
+        </div>
+      </div>
+      <div class="mycal-grid-wrap">
+        <div class="mycal-dow-header">
+          <div class="dow sun">日</div><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow sat">土</div>
+        </div>
+        <div id="mycal-grid" class="mycal-grid"></div>
+      </div>
+    </section>
+
     <section id="view-audit" class="view">
       <div class="page-header">
         <div>
@@ -1303,6 +1387,47 @@ body.is-admin .admin-only { display:flex; }
 </div>
 
 <!-- タスクモーダル -->
+<!-- マイカレンダー予定 編集モーダル -->
+<div class="modal-overlay hidden" id="modal-mycal-event">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-mycal-title">予定を追加</h3>
+      <button class="modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>タイトル *</label><input type="text" id="mycal-event-title" placeholder="例：打合せ、休日、出張" /></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>開始日</label>
+          <input type="date" id="mycal-event-start" />
+        </div>
+        <div class="form-group">
+          <label>終了日</label>
+          <input type="date" id="mycal-event-end" />
+        </div>
+      </div>
+      <div class="form-group">
+        <label>色</label>
+        <div class="mycal-color-picker" id="mycal-color-picker">
+          <span class="mycal-color-opt" data-color="#3b82f6" style="background:#3b82f6"></span>
+          <span class="mycal-color-opt" data-color="#10b981" style="background:#10b981"></span>
+          <span class="mycal-color-opt" data-color="#f59e0b" style="background:#f59e0b"></span>
+          <span class="mycal-color-opt" data-color="#ef4444" style="background:#ef4444"></span>
+          <span class="mycal-color-opt" data-color="#8b5cf6" style="background:#8b5cf6"></span>
+          <span class="mycal-color-opt" data-color="#ec4899" style="background:#ec4899"></span>
+          <span class="mycal-color-opt" data-color="#6b7280" style="background:#6b7280"></span>
+        </div>
+      </div>
+      <div class="form-group"><label>メモ</label><textarea id="mycal-event-note" rows="2" placeholder="任意"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" id="btn-mycal-del" style="margin-right:auto;display:none">削除</button>
+      <button class="btn btn-ghost" id="btn-mycal-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="btn-mycal-save">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 未入力作業員人数モーダル -->
 <div class="modal-overlay hidden" id="modal-missing-workers">
   <div class="modal">
@@ -1871,7 +1996,7 @@ function describeTaskDiff(o, n) {
 // ===== State =====
 var data = loadData();
 var isMobileDevice = window.innerWidth <= 768;
-var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyMonth:null, schedMode:'project', schedAssignee:'', viewingArchivedId:null };
+var state = { view:'dashboard', selectedProjectId:null, selectedTaskId:null, ganttScale:'month', projectFilter:null, schedExpanded:{}, ganttZoom:isMobileDevice?0.7:1, schedZoom:isMobileDevice?0.7:1, historyMonth:null, schedMode:'project', schedAssignee:'', viewingArchivedId:null, calMonth:null, calEditId:null, calEditColor:'#3b82f6' };
 
 // ===== Utils =====
 function qs(sel, ctx) { return (ctx||document).querySelector(sel); }
@@ -1957,6 +2082,7 @@ function navigate(view, pid) {
   if(view==='history') renderHistory();
   if(view==='audit') renderAudit();
   if(view==='members') renderMembers();
+  if(view==='mycal') renderMyCalendar();
 }
 
 // ===== メンバー管理 =====
@@ -3262,6 +3388,233 @@ function archiveProject(p, fromDelete) {
 function googleMapsUrl(location) {
   if (!location) return '';
   return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(location);
+}
+
+// ===== マイカレンダー =====
+// 個人予定は端末内（localStorage）に保存。ユーザーごとに分離。
+function myCalKey() {
+  var uid = currentUser ? currentUser.uid : 'anonymous';
+  return 'mycal_events_' + uid;
+}
+function loadMyCalEvents() {
+  try {
+    var raw = localStorage.getItem(myCalKey());
+    var arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch(e) { return []; }
+}
+function saveMyCalEvents(events) {
+  try { localStorage.setItem(myCalKey(), JSON.stringify(events||[])); } catch(e) {}
+}
+
+// 月キー操作
+function curCalMonth() {
+  if (state.calMonth) return state.calMonth;
+  return todayStr().substring(0,7);
+}
+function shiftMonth(mk, delta) {
+  var y = parseInt(mk.substring(0,4),10);
+  var m = parseInt(mk.substring(5,7),10) - 1 + delta;
+  while (m < 0) { y--; m += 12; }
+  while (m > 11) { y++; m -= 12; }
+  return y + '-' + String(m+1).padStart(2,'0');
+}
+
+// 月のグリッドに表示する 6×7=42 日分を生成（前月・翌月の余分も含む）
+function buildCalendarCells(mk) {
+  var y = parseInt(mk.substring(0,4),10);
+  var m = parseInt(mk.substring(5,7),10) - 1;
+  var firstOfMonth = new Date(y, m, 1);
+  var startDow = firstOfMonth.getDay(); // 0=Sun
+  var cells = [];
+  var start = new Date(y, m, 1 - startDow);
+  for (var i = 0; i < 42; i++) {
+    var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    var ymd = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    cells.push({ ymd: ymd, dateObj: d, inMonth: d.getMonth() === m });
+  }
+  return cells;
+}
+
+// 現場タスク（自動）を取得：ログインユーザーの現場主任タスクを優先、無ければ全タスク
+function getAutoEventsForRange(startDate, endDate) {
+  var events = [];
+  (data.tasks||[]).forEach(function(t){
+    if (!t.startDate || !t.endDate) return;
+    if (t.endDate < startDate || t.startDate > endDate) return;
+    var proj = (data.projects||[]).find(function(p){ return p.id===t.projectId; });
+    var projName = proj ? proj.name : '';
+    var color = (proj && proj.color) || '#f59e0b';
+    // 現場主任が自分なら強調、それ以外はフィルタしない（個人カレンダーなので全部見せる）
+    var mineFlag = isCurrentUserSupervisor(t.supervisor);
+    events.push({
+      id: 'auto-'+t.id,
+      title: projName ? (projName + '：' + t.name) : t.name,
+      startDate: t.startDate,
+      endDate: t.endDate,
+      color: color,
+      isAuto: true,
+      mine: mineFlag
+    });
+  });
+  return events;
+}
+
+function renderMyCalendar() {
+  var mk = curCalMonth();
+  var monthLabel = parseInt(mk.substring(0,4),10) + '年' + parseInt(mk.substring(5,7),10) + '月';
+  qs('#mycal-month-label').textContent = monthLabel;
+  var grid = qs('#mycal-grid');
+  if (!grid) return;
+  var cells = buildCalendarCells(mk);
+  var gridStart = cells[0].ymd;
+  var gridEnd = cells[cells.length-1].ymd;
+  var today = todayStr();
+
+  // イベント収集
+  var personal = loadMyCalEvents().map(function(e){ return Object.assign({}, e, {isAuto:false}); });
+  var autos = getAutoEventsForRange(gridStart, gridEnd);
+  var allEvents = personal.concat(autos);
+  // 期間内のものに絞る
+  allEvents = allEvents.filter(function(e){
+    return e.startDate && e.endDate && !(e.endDate < gridStart || e.startDate > gridEnd);
+  });
+
+  // 各日付ごとにイベントを分配
+  var byDay = {};
+  cells.forEach(function(c){ byDay[c.ymd] = []; });
+  allEvents.forEach(function(e){
+    for (var k = 0; k < cells.length; k++) {
+      var d = cells[k].ymd;
+      if (d < e.startDate || d > e.endDate) continue;
+      // 同じイベントは複数日に出る
+      var pos = (d === e.startDate) ? 'start' : (d === e.endDate) ? 'end' : 'middle';
+      if (e.startDate === e.endDate) pos = 'single';
+      byDay[d].push({ event: e, pos: pos });
+    }
+  });
+
+  grid.innerHTML = '';
+  cells.forEach(function(c){
+    var dow = c.dateObj.getDay();
+    var div = document.createElement('div');
+    div.className = 'mycal-day';
+    if (!c.inMonth) div.classList.add('other-month');
+    if (c.ymd === today) div.classList.add('is-today');
+    if (dow === 0) div.classList.add('is-sun');
+    if (dow === 6) div.classList.add('is-sat');
+    div.dataset.ymd = c.ymd;
+    var dayNum = parseInt(c.ymd.split('-')[2],10);
+    var evHtml = (byDay[c.ymd]||[]).slice(0, 4).map(function(item){
+      var e = item.event;
+      var posCls = ' '+item.pos;
+      var autoCls = e.isAuto ? ' auto' : '';
+      // 中間日はタイトルを省略（開始日のみ表示でも良いが、視認性のため簡略表示）
+      var title = (item.pos==='start' || item.pos==='single') ? e.title : '';
+      return '<div class="mycal-evt'+posCls+autoCls+'" style="background:'+e.color+'" data-eid="'+escHtml(e.id)+'" data-auto="'+(e.isAuto?'1':'0')+'" title="'+escHtml(e.title)+'">'+escHtml(title)+'</div>';
+    }).join('');
+    var moreCount = Math.max(0, (byDay[c.ymd]||[]).length - 4);
+    var moreHtml = moreCount > 0 ? '<div style="font-size:9px;color:var(--text-muted);padding:0 3px">+ '+moreCount+' 件</div>' : '';
+    div.innerHTML = '<span class="mycal-day-num">'+dayNum+'</span><div class="mycal-events">'+evHtml+moreHtml+'</div>';
+    grid.appendChild(div);
+  });
+
+  // クリック：日付セル
+  grid.querySelectorAll('.mycal-day').forEach(function(cell){
+    cell.addEventListener('click', function(e){
+      var evEl = e.target.closest('.mycal-evt');
+      if (evEl) {
+        var isAuto = evEl.dataset.auto === '1';
+        if (isAuto) {
+          toast('自動表示の現場タスクです（編集はダッシュボードから）');
+          return;
+        }
+        var eid = evEl.dataset.eid;
+        openMyCalEventModal(eid);
+        return;
+      }
+      // 空セルクリック → 新規予定（その日を初期値に）
+      openMyCalEventModal(null, cell.dataset.ymd);
+    });
+  });
+}
+
+function openMyCalEventModal(eventId, defaultDate) {
+  var modal = qs('#modal-mycal-event');
+  var titleEl = qs('#mycal-event-title');
+  var startEl = qs('#mycal-event-start');
+  var endEl = qs('#mycal-event-end');
+  var noteEl = qs('#mycal-event-note');
+  var delBtn = qs('#btn-mycal-del');
+  state.calEditId = eventId;
+  if (eventId) {
+    var events = loadMyCalEvents();
+    var ev = events.find(function(e){ return e.id===eventId; });
+    if (!ev) return;
+    qs('#modal-mycal-title').textContent = '予定を編集';
+    titleEl.value = ev.title || '';
+    startEl.value = ev.startDate || '';
+    endEl.value = ev.endDate || '';
+    noteEl.value = ev.notes || '';
+    state.calEditColor = ev.color || '#3b82f6';
+    delBtn.style.display = '';
+  } else {
+    qs('#modal-mycal-title').textContent = '予定を追加';
+    titleEl.value = '';
+    var d = defaultDate || todayStr();
+    startEl.value = d;
+    endEl.value = d;
+    noteEl.value = '';
+    state.calEditColor = '#3b82f6';
+    delBtn.style.display = 'none';
+  }
+  // 色の選択状態を反映
+  qsa('.mycal-color-opt').forEach(function(el){
+    el.classList.toggle('selected', el.dataset.color === state.calEditColor);
+  });
+  modal.classList.remove('hidden');
+  setTimeout(function(){ titleEl.focus(); }, 80);
+}
+
+function saveMyCalEvent() {
+  var title = (qs('#mycal-event-title').value||'').trim();
+  if (!title) { toast('タイトルを入力してください','error'); return; }
+  var startDate = qs('#mycal-event-start').value;
+  var endDate = qs('#mycal-event-end').value || startDate;
+  if (!startDate) { toast('開始日を入力してください','error'); return; }
+  if (endDate < startDate) endDate = startDate;
+  var notes = qs('#mycal-event-note').value || '';
+  var events = loadMyCalEvents();
+  if (state.calEditId) {
+    var idx = events.findIndex(function(e){ return e.id===state.calEditId; });
+    if (idx >= 0) {
+      events[idx] = Object.assign({}, events[idx], { title:title, startDate:startDate, endDate:endDate, color:state.calEditColor, notes:notes });
+    }
+  } else {
+    events.push({
+      id: 'evt'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      title: title,
+      startDate: startDate,
+      endDate: endDate,
+      color: state.calEditColor,
+      notes: notes,
+      createdAt: Date.now()
+    });
+  }
+  saveMyCalEvents(events);
+  qs('#modal-mycal-event').classList.add('hidden');
+  renderMyCalendar();
+  toast('予定を保存しました');
+}
+
+function deleteMyCalEvent() {
+  if (!state.calEditId) return;
+  if (!confirm('この予定を削除しますか？')) return;
+  var events = loadMyCalEvents().filter(function(e){ return e.id !== state.calEditId; });
+  saveMyCalEvents(events);
+  qs('#modal-mycal-event').classList.add('hidden');
+  renderMyCalendar();
+  toast('予定を削除しました');
 }
 
 function getViewingProject() {
@@ -5399,6 +5752,30 @@ document.addEventListener('DOMContentLoaded', function(){
   if (mwSaveBtn) mwSaveBtn.addEventListener('click', saveAllMissingWorkers);
   var mwCloseBtn = qs('#btn-mw-close');
   if (mwCloseBtn) mwCloseBtn.addEventListener('click', function(){ qs('#modal-missing-workers').classList.add('hidden'); });
+
+  // マイカレンダー
+  var mcPrev = qs('#mycal-prev');
+  var mcNext = qs('#mycal-next');
+  var mcToday = qs('#mycal-today');
+  var mcAdd = qs('#btn-mycal-add');
+  if (mcPrev) mcPrev.addEventListener('click', function(){ state.calMonth = shiftMonth(curCalMonth(), -1); renderMyCalendar(); });
+  if (mcNext) mcNext.addEventListener('click', function(){ state.calMonth = shiftMonth(curCalMonth(), 1); renderMyCalendar(); });
+  if (mcToday) mcToday.addEventListener('click', function(){ state.calMonth = todayStr().substring(0,7); renderMyCalendar(); });
+  if (mcAdd) mcAdd.addEventListener('click', function(){ openMyCalEventModal(null); });
+  // 色選択
+  qsa('.mycal-color-opt').forEach(function(el){
+    el.addEventListener('click', function(){
+      state.calEditColor = el.dataset.color;
+      qsa('.mycal-color-opt').forEach(function(o){ o.classList.toggle('selected', o.dataset.color===state.calEditColor); });
+    });
+  });
+  // モーダルの保存/削除/キャンセル
+  var mcSave = qs('#btn-mycal-save');
+  if (mcSave) mcSave.addEventListener('click', saveMyCalEvent);
+  var mcDel = qs('#btn-mycal-del');
+  if (mcDel) mcDel.addEventListener('click', deleteMyCalEvent);
+  var mcCancel = qs('#btn-mycal-cancel');
+  if (mcCancel) mcCancel.addEventListener('click', function(){ qs('#modal-mycal-event').classList.add('hidden'); });
   var archBackBtn = qs('#archived-back-btn');
   if (archBackBtn) archBackBtn.addEventListener('click', function(){
     stopViewArchivedProject();
