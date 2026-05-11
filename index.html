@@ -578,8 +578,10 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .history-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#dcfce7;color:#15803d;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-archived-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#64748b;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-empty { padding:32px;text-align:center;color:var(--text-muted);font-size:13px; }
-.history-del-btn { margin-left:10px;flex-shrink:0;background:#fee2e2;color:#b83c3c;border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
+.history-del-btn { margin-left:6px;flex-shrink:0;background:#fee2e2;color:#b83c3c;border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
 .history-del-btn:hover { background:#fecaca;border-color:#b83c3c; }
+.history-restore-btn { margin-left:10px;flex-shrink:0;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
+.history-restore-btn:hover { background:#bbf7d0;border-color:#15803d; }
 
 /* ===== ログイン画面 ===== */
 #login-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#2e2e2e 0%,#1a1a1a 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px; }
@@ -3814,6 +3816,9 @@ function renderHistory() {
         ? '<span class="history-archived-badge">削除済</span>'
         : '<span class="history-badge">完了</span>';
       var clickable = p.isArchived ? ' data-archived-pid="'+escHtml(p.id)+'" style="cursor:pointer"' : '';
+      var restoreBtn = p.isArchived
+        ? '<button class="history-restore-btn" data-archived-pid="'+escHtml(p.id)+'" title="進行中の案件に戻す">↩ 復元</button>'
+        : '';
       var delBtn = p.isArchived
         ? '<button class="history-del-btn" data-archived-pid="'+escHtml(p.id)+'" title="この履歴を削除">✕</button>'
         : '';
@@ -3824,6 +3829,7 @@ function renderHistory() {
         '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
         '<span class="history-meta" style="margin-left:8px">竣工 '+endFmt+'</span>'+
         '<span class="history-meta" style="margin-left:8px;color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
+        restoreBtn+
         delBtn+
       '</div>';
     }).join('')+
@@ -3832,11 +3838,49 @@ function renderHistory() {
   // 削除済み案件のクリックで工程表閲覧
   listEl.querySelectorAll('.history-item[data-archived-pid]').forEach(function(el){
     el.addEventListener('click', function(e){
-      // 削除ボタンがクリックされた場合は無視
+      // 削除・復元ボタンがクリックされた場合は無視
       if (e.target.closest('.history-del-btn')) return;
+      if (e.target.closest('.history-restore-btn')) return;
       var pid = el.dataset.archivedPid;
       startViewArchivedProject(pid);
       navigate('gantt');
+    });
+  });
+  // 復元ボタン
+  listEl.querySelectorAll('.history-restore-btn').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var pid = btn.dataset.archivedPid;
+      var arch = (data.archivedProjects||[]).find(function(p){ return p.id===pid; });
+      if (!arch) return;
+      if (!confirm('「'+arch.name+'」を進行中の案件として戻しますか？\n\n完了履歴から削除され、ダッシュボードに復活します。')) return;
+      // データを元に戻す
+      var restoredProject = {
+        id: arch.id,
+        name: arch.name,
+        client: arch.client||'',
+        location: arch.location||'',
+        assignee: arch.assignee||'',
+        startDate: arch.startDate||'',
+        endDate: arch.endDate||'',
+        category: arch.category||'',
+        color: arch.color||'#2563eb',
+        status: 'active'
+      };
+      data.projects.push(restoredProject);
+      // タスクも復元（保存されていれば）
+      (arch.tasks||[]).forEach(function(t){
+        // 既に同じIDが data.tasks にないか確認
+        if (!data.tasks.some(function(x){ return x.id === t.id; })) {
+          data.tasks.push(Object.assign({}, t));
+        }
+      });
+      // archivedProjects から削除
+      data.archivedProjects = (data.archivedProjects||[]).filter(function(p){ return p.id!==pid; });
+      saveData(data);
+      toast('「'+arch.name+'」を進行中に戻しました');
+      renderSidebarProjects();
+      renderHistory();
     });
   });
   // 履歴削除ボタン
