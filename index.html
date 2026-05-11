@@ -634,36 +634,6 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
-/* ===== 工程表・スケジュール表のマイカレンダーFAB ===== */
-.mycal-fab { position:absolute; bottom:18px; left:18px; z-index:60; display:flex; align-items:center; gap:6px; background:#3d3d3d; color:#fff; border:none; border-radius:24px; padding:9px 16px; font-size:12px; font-weight:700; cursor:pointer; box-shadow:0 4px 12px rgba(0,0,0,.25); transition:transform .15s ease, background .15s; }
-.mycal-fab:hover { background:#2e2e2e; transform: translateY(-1px); }
-.mycal-fab.is-open { background:#16a34a; }
-.mycal-fab .fab-icon { font-size:14px; line-height:1; }
-.mycal-fab .fab-label { line-height:1; }
-@media (max-width: 768px) {
-  .mycal-fab { bottom:74px; left:12px; padding:7px 12px; font-size:11px; }
-}
-
-.mycal-popup { position:absolute; bottom:62px; left:18px; z-index:70; width:320px; max-width:calc(100vw - 36px); max-height:60vh; background:#fff; border-radius:12px; box-shadow:0 12px 36px rgba(0,0,0,.25); overflow:hidden; transform-origin: bottom left; transition: transform .22s cubic-bezier(.34,1.56,.64,1), opacity .18s ease; display:flex; flex-direction:column; }
-.mycal-popup.hidden { transform: scale(0); opacity: 0; pointer-events:none; }
-.mycal-popup-header { padding:10px 14px; background:#3d3d3d; color:#fff; font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
-.mycal-popup-header .pop-close { background:none; border:none; color:#fff; font-size:18px; cursor:pointer; line-height:1; padding:2px 6px; }
-.mycal-popup-body { padding:8px 0; overflow-y:auto; flex:1; }
-.mycal-popup-empty { padding:24px 16px; text-align:center; color:var(--text-muted); font-size:12px; }
-.mycal-popup-day { padding:10px 14px; border-bottom:1px solid var(--border-lt); }
-.mycal-popup-day:last-child { border-bottom:none; }
-.mycal-popup-day.is-today { background:#fef3c7; }
-.mycal-popup-date { font-size:11px; font-weight:700; color:var(--text-sub); margin-bottom:4px; }
-.mycal-popup-day.is-today .mycal-popup-date { color:#92400e; }
-.mycal-popup-evt { display:flex; align-items:center; gap:8px; padding:5px 0; cursor:pointer; }
-.mycal-popup-evt:hover { background:var(--bg-hover); }
-.mycal-popup-evt-bar { width:4px; height:18px; border-radius:2px; flex-shrink:0; }
-.mycal-popup-evt-text { font-size:12px; color:var(--text); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.mycal-popup-evt-time { font-size:10px; color:var(--text-muted); flex-shrink:0; font-weight:600; }
-@media (max-width: 768px) {
-  .mycal-popup { bottom:118px; left:12px; width:280px; }
-}
-
 /* ===== マイカレンダー（縦スクロール式） ===== */
 #view-mycal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
 #view-mycal .page-header { padding: 12px 16px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
@@ -1142,17 +1112,6 @@ body.is-admin .admin-only { display:flex; }
           <div class="photo-gallery-grid" id="photo-gallery-grid"></div>
         </div>
       </div>
-      <!-- マイカレンダー FAB＋ポップアップ（工程表用） -->
-      <button class="mycal-fab" id="mycal-fab-gantt" type="button" title="個人予定を表示">
-        <span class="fab-icon">📅</span><span class="fab-label">マイカレンダー</span>
-      </button>
-      <div class="mycal-popup hidden" id="mycal-popup-gantt">
-        <div class="mycal-popup-header">
-          <span>📅 マイカレンダー</span>
-          <button class="pop-close" type="button" data-pop-close>×</button>
-        </div>
-        <div class="mycal-popup-body" data-pop-body></div>
-      </div>
     </section>
 
     <!-- 写真入力（iOS対応・label紐付け） -->
@@ -1197,17 +1156,6 @@ body.is-admin .admin-only { display:flex; }
       </div>
       <div class="schedule-container">
         <div id="sched-grid" style="display:grid;min-width:max-content"></div>
-      </div>
-      <!-- マイカレンダー FAB＋ポップアップ（全体スケジュール用） -->
-      <button class="mycal-fab" id="mycal-fab-sched" type="button" title="個人予定を表示">
-        <span class="fab-icon">📅</span><span class="fab-label">マイカレンダー</span>
-      </button>
-      <div class="mycal-popup hidden" id="mycal-popup-sched">
-        <div class="mycal-popup-header">
-          <span>📅 マイカレンダー</span>
-          <button class="pop-close" type="button" data-pop-close>×</button>
-        </div>
-        <div class="mycal-popup-body" data-pop-body></div>
       </div>
     </section>
 
@@ -2138,8 +2086,6 @@ function navigate(view, pid) {
   if (view !== 'gantt' && state.viewingArchivedId) {
     stopViewArchivedProject();
   }
-  // マイカレンダーポップアップは画面切替で閉じる
-  if (typeof closeAllMyCalPopups === 'function') closeAllMyCalPopups();
   state.view=view;
   // viewingArchivedId が設定されている場合は selectedProjectId を上書きしない
   if(pid!==undefined && !state.viewingArchivedId) state.selectedProjectId=pid;
@@ -3646,84 +3592,6 @@ function renderMyCalendar() {
     var curBlock = scrollEl.querySelector('.mycal-month-block[data-mk="'+today+'"]');
     if (curBlock) curBlock.scrollIntoView({ behavior: 'auto', block: 'start' });
   }, 30);
-}
-
-// ===== 工程表・スケジュール表のマイカレンダーポップアップ =====
-function renderMyCalPopupBody(bodyEl) {
-  // 今日から60日先までの個人予定を一覧表示
-  var today = todayStr();
-  var rangeEnd = addDays(today, 60);
-  var events = loadMyCalEvents().filter(function(e){
-    return e.startDate && e.endDate && !(e.endDate < today || e.startDate > rangeEnd);
-  });
-  if (events.length === 0) {
-    bodyEl.innerHTML = '<div class="mycal-popup-empty">今後60日の個人予定はありません。<br>「マイカレンダー」ページから追加できます。</div>';
-    return;
-  }
-  // 日付ごとにグループ化
-  var byDate = {};
-  events.forEach(function(e){
-    // 期間内の各日に展開
-    var s = e.startDate < today ? today : e.startDate;
-    var ee = e.endDate;
-    for (var d = s; d <= ee; d = addDays(d, 1)) {
-      if (d > rangeEnd) break;
-      if (!byDate[d]) byDate[d] = [];
-      byDate[d].push(e);
-    }
-  });
-  var dates = Object.keys(byDate).sort();
-  var DOW = ['日','月','火','水','木','金','土'];
-  bodyEl.innerHTML = dates.map(function(d){
-    var dObj = new Date(d+'T00:00:00');
-    var label = (dObj.getMonth()+1)+'月'+dObj.getDate()+'日（'+DOW[dObj.getDay()]+'）';
-    var isToday = d === today;
-    var rows = byDate[d].map(function(e){
-      var time = e.startTime || '';
-      if (e.startTime && e.endTime) time = e.startTime + '〜' + e.endTime;
-      return '<div class="mycal-popup-evt" data-eid="'+escHtml(e.id)+'">'+
-        '<div class="mycal-popup-evt-bar" style="background:'+e.color+'"></div>'+
-        '<div class="mycal-popup-evt-text">'+escHtml(e.title)+'</div>'+
-        (time ? '<div class="mycal-popup-evt-time">'+escHtml(time)+'</div>' : '')+
-      '</div>';
-    }).join('');
-    return '<div class="mycal-popup-day'+(isToday?' is-today':'')+'">'+
-      '<div class="mycal-popup-date">'+label+(isToday?' ・ 今日':'')+'</div>'+
-      rows+
-    '</div>';
-  }).join('');
-
-  // 予定クリックでマイカレンダーを開く
-  bodyEl.querySelectorAll('.mycal-popup-evt').forEach(function(el){
-    el.addEventListener('click', function(){
-      var eid = el.dataset.eid;
-      // ポップアップを閉じる
-      closeAllMyCalPopups();
-      // マイカレンダー画面を開いて編集
-      navigate('mycal');
-      setTimeout(function(){ openMyCalEventModal(eid); }, 80);
-    });
-  });
-}
-
-function toggleMyCalPopup(popupId, fabId) {
-  var popup = qs('#'+popupId);
-  var fab = qs('#'+fabId);
-  if (!popup || !fab) return;
-  if (popup.classList.contains('hidden')) {
-    // 表示前にレンダリング
-    renderMyCalPopupBody(popup.querySelector('[data-pop-body]'));
-    popup.classList.remove('hidden');
-    fab.classList.add('is-open');
-  } else {
-    popup.classList.add('hidden');
-    fab.classList.remove('is-open');
-  }
-}
-
-function closeAllMyCalPopups() {
-  qsa('.mycal-popup').forEach(function(p){ p.classList.add('hidden'); });
-  qsa('.mycal-fab').forEach(function(f){ f.classList.remove('is-open'); });
 }
 
 function openMyCalEventModal(eventId, defaultDate) {
@@ -5956,25 +5824,6 @@ document.addEventListener('DOMContentLoaded', function(){
   if (mwSaveBtn) mwSaveBtn.addEventListener('click', saveAllMissingWorkers);
   var mwCloseBtn = qs('#btn-mw-close');
   if (mwCloseBtn) mwCloseBtn.addEventListener('click', function(){ qs('#modal-missing-workers').classList.add('hidden'); });
-
-  // 工程表・スケジュール表のマイカレンダーFAB
-  var fabGantt = qs('#mycal-fab-gantt');
-  var fabSched = qs('#mycal-fab-sched');
-  if (fabGantt) fabGantt.addEventListener('click', function(e){
-    e.stopPropagation(); toggleMyCalPopup('mycal-popup-gantt', 'mycal-fab-gantt');
-  });
-  if (fabSched) fabSched.addEventListener('click', function(e){
-    e.stopPropagation(); toggleMyCalPopup('mycal-popup-sched', 'mycal-fab-sched');
-  });
-  qsa('[data-pop-close]').forEach(function(b){
-    b.addEventListener('click', function(){ closeAllMyCalPopups(); });
-  });
-  // ポップアップ外クリックで閉じる
-  document.addEventListener('click', function(e){
-    if (!e.target.closest('.mycal-popup') && !e.target.closest('.mycal-fab')) {
-      closeAllMyCalPopups();
-    }
-  });
 
   // マイカレンダー
   var mcToday = qs('#mycal-today');
