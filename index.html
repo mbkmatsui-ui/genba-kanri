@@ -570,18 +570,32 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 }
 .history-year-tab { padding:5px 14px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .history-year-tab.active { background:var(--primary);color:#fff;border-color:var(--primary); }
-.history-item { display:flex;align-items:center;gap:12px;padding:11px 14px;border-bottom:1px solid var(--border);transition:background .12s; }
+.history-item { display:block; padding:11px 14px; border-bottom:1px solid var(--border); transition:background .12s; }
 .history-item:hover { background:var(--bg-surface); }
-.history-num { font-size:13px;font-weight:800;color:var(--primary);min-width:32px;text-align:right;flex-shrink:0; }
-.history-name { font-size:13px;font-weight:700;color:var(--text-main);flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.history-meta { font-size:11px;color:var(--text-muted);white-space:nowrap;flex-shrink:0; }
+.history-row-main { display:flex; align-items:center; gap:10px; }
+.history-row-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:4px; padding-left:38px; }
+.history-num { font-size:13px; font-weight:800; color:var(--primary); min-width:30px; text-align:right; flex-shrink:0; }
+.history-name { font-size:13px; font-weight:700; color:var(--text-main); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.history-meta { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+@media (max-width: 768px) {
+  .history-item { padding:9px 10px; }
+  .history-row-main { gap:8px; }
+  .history-num { font-size:11px; min-width:26px; }
+  .history-name { font-size:12px; }
+  .history-row-meta { padding-left:32px; gap:6px; margin-top:3px; }
+  .history-meta { font-size:10px; }
+}
 .history-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#dcfce7;color:#15803d;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-archived-badge { font-size:10px;padding:1px 7px;border-radius:99px;background:#f1f5f9;color:#64748b;font-weight:700;margin-left:6px;flex-shrink:0; }
 .history-empty { padding:32px;text-align:center;color:var(--text-muted);font-size:13px; }
-.history-del-btn { margin-left:6px;flex-shrink:0;background:#fee2e2;color:#b83c3c;border:1px solid #fca5a5;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
-.history-del-btn:hover { background:#fecaca;border-color:#b83c3c; }
-.history-restore-btn { margin-left:10px;flex-shrink:0;background:#dcfce7;color:#15803d;border:1px solid #86efac;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;transition:all .15s; }
-.history-restore-btn:hover { background:#bbf7d0;border-color:#15803d; }
+.history-del-btn { flex-shrink:0; background:#fee2e2; color:#b83c3c; border:1px solid #fca5a5; border-radius:6px; padding:3px 8px; font-size:11px; font-weight:700; cursor:pointer; transition:all .15s; }
+.history-del-btn:hover { background:#fecaca; border-color:#b83c3c; }
+.history-restore-btn { flex-shrink:0; margin-left:auto; background:#dcfce7; color:#15803d; border:1px solid #86efac; border-radius:6px; padding:3px 10px; font-size:11px; font-weight:700; cursor:pointer; transition:all .15s; }
+.history-restore-btn:hover { background:#bbf7d0; border-color:#15803d; }
+.history-row-main .history-del-btn { margin-left:0; }
+@media (max-width: 768px) {
+  .history-restore-btn, .history-del-btn { font-size:10px; padding:3px 7px; }
+}
 
 /* ===== ログイン画面 ===== */
 #login-overlay { position:fixed;inset:0;background:linear-gradient(135deg,#2e2e2e 0%,#1a1a1a 100%);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px; }
@@ -3823,14 +3837,18 @@ function renderHistory() {
         ? '<button class="history-del-btn" data-archived-pid="'+escHtml(p.id)+'" title="この履歴を削除">✕</button>'
         : '';
       return '<div class="history-item"'+clickable+'>'+
-        '<span class="history-num">No.'+(num<10?'0':'')+num+'</span>'+
-        '<span class="history-name">'+escHtml(p.name)+'</span>'+
-        badge+
-        '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
-        '<span class="history-meta" style="margin-left:8px">竣工 '+endFmt+'</span>'+
-        '<span class="history-meta" style="margin-left:8px;color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
-        restoreBtn+
-        delBtn+
+        '<div class="history-row-main">'+
+          '<span class="history-num">No.'+(num<10?'0':'')+num+'</span>'+
+          '<span class="history-name">'+escHtml(p.name)+'</span>'+
+          restoreBtn+
+          delBtn+
+        '</div>'+
+        '<div class="history-row-meta">'+
+          badge+
+          '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
+          '<span class="history-meta">竣工 '+endFmt+'</span>'+
+          '<span class="history-meta" style="color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
+        '</div>'+
       '</div>';
     }).join('')+
     '</div>';
