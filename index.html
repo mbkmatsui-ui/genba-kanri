@@ -135,7 +135,12 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .projects-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(175px, 1fr)); gap: 8px; }
 .project-card { background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; transition: border-color .2s, transform .15s, box-shadow .2s; display: flex; flex-direction: column; }
 .project-card:hover { border-color: var(--primary-lt); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.project-card-header { padding: 9px 10px 6px; border-left: 3px solid var(--primary); flex: 1; }
+.project-card-header { padding: 9px 10px 6px; border-left: 3px solid var(--primary); flex: 1; display: flex; gap: 9px; align-items: flex-start; }
+.proj-icon { flex-shrink: 0; width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.35); box-shadow: 0 1px 3px rgba(0,0,0,.2); line-height: 1; overflow: hidden; padding: 3px; text-align: center; }
+@media (max-width: 768px) {
+  .proj-icon { width: 32px; height: 32px; font-size: 12px; border-radius: 8px; }
+  .project-card-header { gap: 7px; }
+}
 .project-card-body { padding: 0 10px 8px; }
 .project-card-footer { padding: 5px 10px; background: rgba(0,0,0,.03); border-top: 1px solid var(--border-lt); display: flex; justify-content: space-between; align-items: center; gap: 4px; }
 .project-title { font-size: 13px; font-weight: 700; color: var(--text); line-height: 1.4; }
@@ -2719,9 +2724,12 @@ function renderDashboard() {
     var doneCnt=tasks.filter(function(t){return t.status==='done';}).length;
     var card=document.createElement('div');
     card.className='project-card';
+    // 案件名の頭1文字（漢字・英字）をアイコンに表示
+    var iconChar = (p.name||'').trim().substring(0,1) || '?';
     card.innerHTML=
       '<div class="project-card-header" style="border-left-color:'+p.color+'">'+
-        '<div style="flex:1">'+
+        '<div class="proj-icon" style="background:'+(p.color||'#888')+'">'+escHtml(iconChar)+'</div>'+
+        '<div style="flex:1;min-width:0">'+
           '<div class="project-title">'+p.name+'</div>'+
           (p.category?'<div style="margin-top:3px"><span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:99px;background:rgba(255,255,255,.1);color:var(--text-sub)">'+p.category+'</span></div>':'')+
           '<div class="project-meta">'+
