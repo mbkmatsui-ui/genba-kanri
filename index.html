@@ -645,7 +645,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .mycal-leg-evt { display:inline-block; width:18px; height:11px; border-radius:2px; margin-right:4px; vertical-align:-2px; }
 
 /* 共通の曜日ヘッダー（縦スクロールしても上部に固定） */
-.mycal-dow-header { display:grid; grid-template-columns:repeat(7, 1fr); background:#f3f4f6; border-bottom:1px solid var(--border); position: sticky; top: 0; z-index: 10; flex-shrink: 0; }
+.mycal-dow-header { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); background:#f3f4f6; border-bottom:1px solid var(--border); position: sticky; top: 0; z-index: 10; flex-shrink: 0; }
 .mycal-dow-header .dow { padding:8px 6px; text-align:center; font-size:12px; font-weight:700; color:var(--text-sub); border-right:1px solid var(--border-lt); }
 .mycal-dow-header .dow:last-child { border-right:none; }
 .mycal-dow-header .dow.sun { color:#dc2626; }
@@ -656,8 +656,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .mycal-month-block { border-bottom: 4px solid #e5e7eb; }
 .mycal-month-title { padding: 8px 14px; font-size: 16px; font-weight: 700; background: #f9fafb; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; color: var(--text); }
 .mycal-month-title.is-current { background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%); color: #92400e; }
-.mycal-grid { display:grid; grid-template-columns:repeat(7, 1fr); grid-auto-rows: minmax(86px, auto); }
-.mycal-day { border-right:1px solid var(--border-lt); border-bottom:1px solid var(--border-lt); padding:3px 3px 4px; position:relative; cursor:pointer; transition:background .12s; min-height:86px; }
+.mycal-grid { display:grid; grid-template-columns:repeat(7, minmax(0, 1fr)); grid-auto-rows: minmax(86px, auto); }
+.mycal-day { border-right:1px solid var(--border-lt); border-bottom:1px solid var(--border-lt); padding:3px 3px 4px; position:relative; cursor:pointer; transition:background .12s; min-height:86px; min-width:0; overflow:hidden; }
 .mycal-day:nth-child(7n) { border-right:none; }
 .mycal-day:hover { background:#f9fafb; }
 .mycal-day.other-month { background:#fafafa; }
@@ -668,10 +668,10 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .mycal-day.is-sat .mycal-day-num { color:#2563eb; }
 .mycal-day.is-today.is-sun .mycal-day-num,
 .mycal-day.is-today.is-sat .mycal-day-num { color:#fff; }
-.mycal-events { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+.mycal-events { display:flex; flex-direction:column; gap:2px; margin-top:2px; min-width:0; max-width:100%; }
 
 /* 個人予定: 文字付き */
-.mycal-evt-personal { font-size:10px; color:#fff; padding:2px 5px; border-radius:3px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.08); line-height:1.3; }
+.mycal-evt-personal { display:block; box-sizing:border-box; width:100%; max-width:100%; min-width:0; font-size:10px; color:#fff; padding:2px 5px; border-radius:3px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.08); line-height:1.3; }
 .mycal-evt-personal:hover { opacity:.85; }
 .mycal-evt-personal.start { border-radius:3px 0 0 3px; padding-left:5px; }
 .mycal-evt-personal.middle { border-radius:0; padding:2px 5px; color:transparent; }
@@ -1409,14 +1409,20 @@ body.is-admin .admin-only { display:flex; }
     </div>
     <div class="modal-body">
       <div class="form-group"><label>タイトル *</label><input type="text" id="mycal-event-title" placeholder="例：打合せ、休日、出張" /></div>
+      <div class="form-group">
+        <label>日付</label>
+        <div id="mycal-event-date-label" style="font-size:14px;font-weight:600;color:var(--text);padding:8px 12px;background:var(--bg-surface);border-radius:var(--radius);border:1px solid var(--border)">—</div>
+        <input type="hidden" id="mycal-event-start" />
+        <input type="hidden" id="mycal-event-end" />
+      </div>
       <div class="form-row">
         <div class="form-group">
-          <label>開始日</label>
-          <input type="date" id="mycal-event-start" />
+          <label>開始時刻（任意）</label>
+          <input type="time" id="mycal-event-start-time" />
         </div>
         <div class="form-group">
-          <label>終了日</label>
-          <input type="date" id="mycal-event-end" />
+          <label>終了時刻（任意）</label>
+          <input type="time" id="mycal-event-end-time" />
         </div>
       </div>
       <div class="form-group">
@@ -3521,8 +3527,13 @@ function buildMonthBlockHtml(mk) {
     // 個人予定（文字付き）
     var personalHtml = bucket.personal.slice(0,3).map(function(item){
       var e = item.event;
-      var title = (item.pos==='start' || item.pos==='single') ? escHtml(e.title) : '';
-      return '<div class="mycal-evt-personal '+item.pos+'" style="background:'+e.color+'" data-eid="'+escHtml(e.id)+'" title="'+escHtml(e.title)+'">'+title+'</div>';
+      // 開始日 or 単日のみテキスト表示。時刻があれば前置。
+      var titleText = '';
+      if (item.pos==='start' || item.pos==='single') {
+        titleText = e.startTime ? (e.startTime + ' ' + e.title) : e.title;
+      }
+      var tooltip = (e.startTime ? e.startTime+(e.endTime?'〜'+e.endTime:'')+' ' : '') + e.title;
+      return '<div class="mycal-evt-personal '+item.pos+'" style="background:'+e.color+'" data-eid="'+escHtml(e.id)+'" title="'+escHtml(tooltip)+'">'+escHtml(titleText)+'</div>';
     }).join('');
     // 現場タスク（細バー・文字なし）
     var autoHtml = bucket.auto.slice(0,5).map(function(item){
@@ -3588,30 +3599,43 @@ function openMyCalEventModal(eventId, defaultDate) {
   var titleEl = qs('#mycal-event-title');
   var startEl = qs('#mycal-event-start');
   var endEl = qs('#mycal-event-end');
+  var startTimeEl = qs('#mycal-event-start-time');
+  var endTimeEl = qs('#mycal-event-end-time');
+  var dateLabelEl = qs('#mycal-event-date-label');
   var noteEl = qs('#mycal-event-note');
   var delBtn = qs('#btn-mycal-del');
   state.calEditId = eventId;
+  var ymd;
   if (eventId) {
     var events = loadMyCalEvents();
     var ev = events.find(function(e){ return e.id===eventId; });
     if (!ev) return;
     qs('#modal-mycal-title').textContent = '予定を編集';
     titleEl.value = ev.title || '';
-    startEl.value = ev.startDate || '';
-    endEl.value = ev.endDate || '';
+    ymd = ev.startDate || todayStr();
+    startEl.value = ymd;
+    endEl.value = ev.endDate || ymd;
+    startTimeEl.value = ev.startTime || '';
+    endTimeEl.value = ev.endTime || '';
     noteEl.value = ev.notes || '';
     state.calEditColor = ev.color || '#3b82f6';
     delBtn.style.display = '';
   } else {
     qs('#modal-mycal-title').textContent = '予定を追加';
     titleEl.value = '';
-    var d = defaultDate || todayStr();
-    startEl.value = d;
-    endEl.value = d;
+    ymd = defaultDate || todayStr();
+    startEl.value = ymd;
+    endEl.value = ymd;
+    startTimeEl.value = '';
+    endTimeEl.value = '';
     noteEl.value = '';
     state.calEditColor = '#3b82f6';
     delBtn.style.display = 'none';
   }
+  // 日付ラベルを表示
+  var dObj = new Date(ymd+'T00:00:00');
+  var dowJp = ['日','月','火','水','木','金','土'][dObj.getDay()];
+  dateLabelEl.textContent = dObj.getFullYear()+'年'+(dObj.getMonth()+1)+'月'+dObj.getDate()+'日（'+dowJp+'）';
   // 色の選択状態を反映
   qsa('.mycal-color-opt').forEach(function(el){
     el.classList.toggle('selected', el.dataset.color === state.calEditColor);
@@ -3625,14 +3649,16 @@ function saveMyCalEvent() {
   if (!title) { toast('タイトルを入力してください','error'); return; }
   var startDate = qs('#mycal-event-start').value;
   var endDate = qs('#mycal-event-end').value || startDate;
-  if (!startDate) { toast('開始日を入力してください','error'); return; }
+  if (!startDate) { toast('日付がありません','error'); return; }
   if (endDate < startDate) endDate = startDate;
+  var startTime = qs('#mycal-event-start-time').value || '';
+  var endTime = qs('#mycal-event-end-time').value || '';
   var notes = qs('#mycal-event-note').value || '';
   var events = loadMyCalEvents();
   if (state.calEditId) {
     var idx = events.findIndex(function(e){ return e.id===state.calEditId; });
     if (idx >= 0) {
-      events[idx] = Object.assign({}, events[idx], { title:title, startDate:startDate, endDate:endDate, color:state.calEditColor, notes:notes });
+      events[idx] = Object.assign({}, events[idx], { title:title, startDate:startDate, endDate:endDate, startTime:startTime, endTime:endTime, color:state.calEditColor, notes:notes });
     }
   } else {
     events.push({
@@ -3640,6 +3666,8 @@ function saveMyCalEvent() {
       title: title,
       startDate: startDate,
       endDate: endDate,
+      startTime: startTime,
+      endTime: endTime,
       color: state.calEditColor,
       notes: notes,
       createdAt: Date.now()
