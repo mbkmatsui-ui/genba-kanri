@@ -634,52 +634,70 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .audit-filter-btn { padding:5px 12px;border-radius:999px;border:1.5px solid var(--border);background:var(--bg-surface);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s; }
 .audit-filter-btn.active { background:var(--primary);color:#fff;border-color:var(--primary); }
 
-/* ===== マイカレンダー ===== */
-#view-mycal { padding: 12px 20px 20px; overflow: auto; }
-.mycal-toolbar { display:flex; align-items:center; gap:10px; margin: 4px 0 12px; flex-wrap: wrap; }
-.mycal-nav-btn { width:34px; height:34px; border:1px solid var(--border); background:#fff; border-radius:6px; font-size:20px; cursor:pointer; color:var(--text); line-height:1; padding:0; }
-.mycal-nav-btn:hover { background:var(--bg-hover); }
-.mycal-month-label { font-size:18px; font-weight:700; min-width:120px; text-align:center; }
+/* ===== マイカレンダー（縦スクロール式） ===== */
+#view-mycal { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+#view-mycal .page-header { padding: 12px 16px; flex-shrink: 0; border-bottom: 1px solid var(--border); }
+.mycal-toolbar { display:flex; align-items:center; gap:10px; padding: 8px 16px; flex-wrap: wrap; flex-shrink: 0; background: var(--bg-surface); border-bottom: 1px solid var(--border); }
 .mycal-today-btn { padding:6px 12px; border:1px solid var(--border); background:#fff; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; }
 .mycal-today-btn:hover { background:var(--bg-hover); }
 .mycal-legend { display:flex; gap:14px; font-size:11px; color:var(--text-sub); margin-left:auto; flex-wrap:wrap; }
-.mycal-leg-dot { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:4px; vertical-align:-1px; }
+.mycal-leg-bar { display:inline-block; width:18px; height:4px; border-radius:2px; margin-right:4px; vertical-align:1px; }
+.mycal-leg-evt { display:inline-block; width:18px; height:11px; border-radius:2px; margin-right:4px; vertical-align:-2px; }
 
-.mycal-grid-wrap { border:1px solid var(--border); border-radius:8px; overflow:hidden; background:#fff; }
-.mycal-dow-header { display:grid; grid-template-columns:repeat(7, 1fr); background:#f3f4f6; border-bottom:1px solid var(--border); }
+/* 共通の曜日ヘッダー（縦スクロールしても上部に固定） */
+.mycal-dow-header { display:grid; grid-template-columns:repeat(7, 1fr); background:#f3f4f6; border-bottom:1px solid var(--border); position: sticky; top: 0; z-index: 10; flex-shrink: 0; }
 .mycal-dow-header .dow { padding:8px 6px; text-align:center; font-size:12px; font-weight:700; color:var(--text-sub); border-right:1px solid var(--border-lt); }
 .mycal-dow-header .dow:last-child { border-right:none; }
 .mycal-dow-header .dow.sun { color:#dc2626; }
 .mycal-dow-header .dow.sat { color:#2563eb; }
-.mycal-grid { display:grid; grid-template-columns:repeat(7, 1fr); grid-auto-rows: minmax(110px, auto); }
-.mycal-day { border-right:1px solid var(--border-lt); border-bottom:1px solid var(--border-lt); padding:4px 4px 6px; position:relative; cursor:pointer; transition:background .12s; min-height:110px; }
+
+/* 縦スクロールエリア */
+.mycal-scroll { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; background: #fff; }
+.mycal-month-block { border-bottom: 4px solid #e5e7eb; }
+.mycal-month-title { padding: 8px 14px; font-size: 16px; font-weight: 700; background: #f9fafb; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 5; color: var(--text); }
+.mycal-month-title.is-current { background: linear-gradient(90deg, #fef3c7 0%, #fffbeb 100%); color: #92400e; }
+.mycal-grid { display:grid; grid-template-columns:repeat(7, 1fr); grid-auto-rows: minmax(86px, auto); }
+.mycal-day { border-right:1px solid var(--border-lt); border-bottom:1px solid var(--border-lt); padding:3px 3px 4px; position:relative; cursor:pointer; transition:background .12s; min-height:86px; }
 .mycal-day:nth-child(7n) { border-right:none; }
 .mycal-day:hover { background:#f9fafb; }
-.mycal-day.other-month { background:#fafafa; color:#cbd5e1; }
+.mycal-day.other-month { background:#fafafa; }
+.mycal-day.other-month .mycal-day-num { color:#cbd5e1; }
 .mycal-day.is-today .mycal-day-num { background:#000; color:#fff; }
-.mycal-day-num { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; border-radius:50%; font-size:13px; font-weight:700; padding:0 5px; }
+.mycal-day-num { display:inline-flex; align-items:center; justify-content:center; min-width:22px; height:22px; border-radius:50%; font-size:12px; font-weight:700; padding:0 5px; }
 .mycal-day.is-sun .mycal-day-num { color:#dc2626; }
 .mycal-day.is-sat .mycal-day-num { color:#2563eb; }
-.mycal-events { display:flex; flex-direction:column; gap:2px; margin-top:3px; }
-.mycal-evt { font-size:10px; color:#fff; padding:2px 5px; border-radius:3px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.08); }
-.mycal-evt:hover { opacity:.85; }
-.mycal-evt.continued { border-radius:0; }
-.mycal-evt.start { border-radius:3px 0 0 3px; }
-.mycal-evt.end { border-radius:0 3px 3px 0; }
-.mycal-evt.middle { border-radius:0; }
-.mycal-evt.auto { opacity:.85; }
+.mycal-day.is-today.is-sun .mycal-day-num,
+.mycal-day.is-today.is-sat .mycal-day-num { color:#fff; }
+.mycal-events { display:flex; flex-direction:column; gap:2px; margin-top:2px; }
+
+/* 個人予定: 文字付き */
+.mycal-evt-personal { font-size:10px; color:#fff; padding:2px 5px; border-radius:3px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; box-shadow:0 1px 1px rgba(0,0,0,.08); line-height:1.3; }
+.mycal-evt-personal:hover { opacity:.85; }
+.mycal-evt-personal.start { border-radius:3px 0 0 3px; padding-left:5px; }
+.mycal-evt-personal.middle { border-radius:0; padding:2px 5px; color:transparent; }
+.mycal-evt-personal.end { border-radius:0 3px 3px 0; color:transparent; padding:2px 5px; }
+.mycal-evt-personal.single { border-radius:3px; }
+/* 現場タスク: 細い色バーのみ・文字なし */
+.mycal-evt-auto { height:5px; min-height:5px; border-radius:0; opacity:.85; cursor:default; }
+.mycal-evt-auto.start { border-radius:3px 0 0 3px; }
+.mycal-evt-auto.end { border-radius:0 3px 3px 0; }
+.mycal-evt-auto.single { border-radius:3px; }
+.mycal-evt-auto.is-mine { height:7px; opacity:1; }
+
 .mycal-color-picker { display:flex; gap:8px; padding:6px 0; }
 .mycal-color-opt { width:30px; height:30px; border-radius:50%; cursor:pointer; border:3px solid transparent; transition:transform .1s; }
 .mycal-color-opt:hover { transform:scale(1.1); }
 .mycal-color-opt.selected { border-color:#1a1a1a; }
+
 @media (max-width: 768px) {
-  #view-mycal { padding: 8px 10px 80px; }
-  .mycal-grid { grid-auto-rows: minmax(72px, auto); }
-  .mycal-day { min-height: 72px; padding:2px 2px 4px; }
+  .mycal-grid { grid-auto-rows: minmax(70px, auto); }
+  .mycal-day { min-height: 70px; padding:2px 2px 3px; }
   .mycal-day-num { font-size:11px; min-width:18px; height:18px; }
-  .mycal-evt { font-size:9px; padding:1px 3px; }
-  .mycal-legend { font-size:10px; }
-  .mycal-toolbar { gap:6px; }
+  .mycal-evt-personal { font-size:9px; padding:1px 3px; }
+  .mycal-evt-auto { height:4px; min-height:4px; }
+  .mycal-legend { font-size:10px; gap:8px; }
+  .mycal-toolbar { gap:6px; padding:6px 10px; }
+  .mycal-month-title { font-size:14px; padding:6px 10px; }
 }
 
 /* ===== 位置情報リンク（Google Maps） ===== */
@@ -1222,7 +1240,7 @@ body.is-admin .admin-only { display:flex; }
       <div class="page-header">
         <div>
           <h2>マイカレンダー</h2>
-          <div class="page-subtitle">あなた専用のカレンダー（端末内に保存・他のメンバーには共有されません）</div>
+          <div class="page-subtitle">あなた専用のカレンダー（端末内保存・非共有）</div>
         </div>
         <div class="actions">
           <button class="btn btn-primary btn-sm" id="btn-mycal-add">
@@ -1232,21 +1250,16 @@ body.is-admin .admin-only { display:flex; }
         </div>
       </div>
       <div class="mycal-toolbar">
-        <button class="mycal-nav-btn" id="mycal-prev">‹</button>
-        <span class="mycal-month-label" id="mycal-month-label">—</span>
-        <button class="mycal-nav-btn" id="mycal-next">›</button>
-        <button class="mycal-today-btn" id="mycal-today">今日</button>
+        <button class="mycal-today-btn" id="mycal-today">今日へ</button>
         <div class="mycal-legend">
-          <span><span class="mycal-leg-dot" style="background:#3b82f6"></span>個人予定</span>
-          <span><span class="mycal-leg-dot" style="background:#f59e0b"></span>現場タスク（自動）</span>
+          <span><span class="mycal-leg-evt" style="background:#3b82f6"></span>個人予定</span>
+          <span><span class="mycal-leg-bar" style="background:#f59e0b"></span>現場タスク（自動）</span>
         </div>
       </div>
-      <div class="mycal-grid-wrap">
-        <div class="mycal-dow-header">
-          <div class="dow sun">日</div><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow sat">土</div>
-        </div>
-        <div id="mycal-grid" class="mycal-grid"></div>
+      <div class="mycal-dow-header">
+        <div class="dow sun">日</div><div class="dow">月</div><div class="dow">火</div><div class="dow">水</div><div class="dow">木</div><div class="dow">金</div><div class="dow sat">土</div>
       </div>
+      <div class="mycal-scroll" id="mycal-scroll"></div>
     </section>
 
     <section id="view-audit" class="view">
@@ -3460,83 +3473,114 @@ function getAutoEventsForRange(startDate, endDate) {
   return events;
 }
 
-function renderMyCalendar() {
-  var mk = curCalMonth();
-  var monthLabel = parseInt(mk.substring(0,4),10) + '年' + parseInt(mk.substring(5,7),10) + '月';
-  qs('#mycal-month-label').textContent = monthLabel;
-  var grid = qs('#mycal-grid');
-  if (!grid) return;
+// 1ヶ月分のグリッドHTMLを生成
+function buildMonthBlockHtml(mk) {
   var cells = buildCalendarCells(mk);
   var gridStart = cells[0].ymd;
   var gridEnd = cells[cells.length-1].ymd;
   var today = todayStr();
+  var currentMonth = today.substring(0,7);
 
   // イベント収集
   var personal = loadMyCalEvents().map(function(e){ return Object.assign({}, e, {isAuto:false}); });
   var autos = getAutoEventsForRange(gridStart, gridEnd);
-  var allEvents = personal.concat(autos);
-  // 期間内のものに絞る
-  allEvents = allEvents.filter(function(e){
+  var allEvents = personal.concat(autos).filter(function(e){
     return e.startDate && e.endDate && !(e.endDate < gridStart || e.startDate > gridEnd);
   });
 
-  // 各日付ごとにイベントを分配
+  // 各日付ごとにイベントを分配。個人予定は常に上、現場タスクは下。
   var byDay = {};
-  cells.forEach(function(c){ byDay[c.ymd] = []; });
+  cells.forEach(function(c){ byDay[c.ymd] = { personal: [], auto: [] }; });
   allEvents.forEach(function(e){
     for (var k = 0; k < cells.length; k++) {
       var d = cells[k].ymd;
       if (d < e.startDate || d > e.endDate) continue;
-      // 同じイベントは複数日に出る
-      var pos = (d === e.startDate) ? 'start' : (d === e.endDate) ? 'end' : 'middle';
+      var pos;
       if (e.startDate === e.endDate) pos = 'single';
-      byDay[d].push({ event: e, pos: pos });
+      else if (d === e.startDate) pos = 'start';
+      else if (d === e.endDate) pos = 'end';
+      else pos = 'middle';
+      if (e.isAuto) byDay[d].auto.push({event:e, pos:pos});
+      else byDay[d].personal.push({event:e, pos:pos});
     }
   });
 
-  grid.innerHTML = '';
-  cells.forEach(function(c){
-    var dow = c.dateObj.getDay();
-    var div = document.createElement('div');
-    div.className = 'mycal-day';
-    if (!c.inMonth) div.classList.add('other-month');
-    if (c.ymd === today) div.classList.add('is-today');
-    if (dow === 0) div.classList.add('is-sun');
-    if (dow === 6) div.classList.add('is-sat');
-    div.dataset.ymd = c.ymd;
-    var dayNum = parseInt(c.ymd.split('-')[2],10);
-    var evHtml = (byDay[c.ymd]||[]).slice(0, 4).map(function(item){
-      var e = item.event;
-      var posCls = ' '+item.pos;
-      var autoCls = e.isAuto ? ' auto' : '';
-      // 中間日はタイトルを省略（開始日のみ表示でも良いが、視認性のため簡略表示）
-      var title = (item.pos==='start' || item.pos==='single') ? e.title : '';
-      return '<div class="mycal-evt'+posCls+autoCls+'" style="background:'+e.color+'" data-eid="'+escHtml(e.id)+'" data-auto="'+(e.isAuto?'1':'0')+'" title="'+escHtml(e.title)+'">'+escHtml(title)+'</div>';
-    }).join('');
-    var moreCount = Math.max(0, (byDay[c.ymd]||[]).length - 4);
-    var moreHtml = moreCount > 0 ? '<div style="font-size:9px;color:var(--text-muted);padding:0 3px">+ '+moreCount+' 件</div>' : '';
-    div.innerHTML = '<span class="mycal-day-num">'+dayNum+'</span><div class="mycal-events">'+evHtml+moreHtml+'</div>';
-    grid.appendChild(div);
-  });
+  var mp = mk.split('-');
+  var monthTitle = mp[0]+'年'+parseInt(mp[1],10)+'月';
+  var isCurrent = mk === currentMonth;
 
-  // クリック：日付セル
-  grid.querySelectorAll('.mycal-day').forEach(function(cell){
-    cell.addEventListener('click', function(e){
-      var evEl = e.target.closest('.mycal-evt');
-      if (evEl) {
-        var isAuto = evEl.dataset.auto === '1';
-        if (isAuto) {
-          toast('自動表示の現場タスクです（編集はダッシュボードから）');
-          return;
-        }
-        var eid = evEl.dataset.eid;
-        openMyCalEventModal(eid);
-        return;
-      }
-      // 空セルクリック → 新規予定（その日を初期値に）
+  var cellsHtml = cells.map(function(c){
+    var dow = c.dateObj.getDay();
+    var classes = ['mycal-day'];
+    if (!c.inMonth) classes.push('other-month');
+    if (c.ymd === today) classes.push('is-today');
+    if (dow === 0) classes.push('is-sun');
+    if (dow === 6) classes.push('is-sat');
+    var dayNum = parseInt(c.ymd.split('-')[2],10);
+    var bucket = byDay[c.ymd] || {personal:[], auto:[]};
+    // 個人予定（文字付き）
+    var personalHtml = bucket.personal.slice(0,3).map(function(item){
+      var e = item.event;
+      var title = (item.pos==='start' || item.pos==='single') ? escHtml(e.title) : '';
+      return '<div class="mycal-evt-personal '+item.pos+'" style="background:'+e.color+'" data-eid="'+escHtml(e.id)+'" title="'+escHtml(e.title)+'">'+title+'</div>';
+    }).join('');
+    // 現場タスク（細バー・文字なし）
+    var autoHtml = bucket.auto.slice(0,5).map(function(item){
+      var e = item.event;
+      var mine = e.mine ? ' is-mine' : '';
+      return '<div class="mycal-evt-auto '+item.pos+mine+'" style="background:'+e.color+'" title="'+escHtml(e.title)+'"></div>';
+    }).join('');
+    var morePersonal = bucket.personal.length - 3;
+    var moreHtml = morePersonal > 0 ? '<div style="font-size:9px;color:var(--text-muted);padding:0 3px">+ '+morePersonal+' 件</div>' : '';
+    return '<div class="'+classes.join(' ')+'" data-ymd="'+c.ymd+'">'+
+      '<span class="mycal-day-num">'+dayNum+'</span>'+
+      '<div class="mycal-events">'+personalHtml+moreHtml+autoHtml+'</div>'+
+    '</div>';
+  }).join('');
+
+  return '<div class="mycal-month-block" data-mk="'+mk+'">'+
+    '<div class="mycal-month-title'+(isCurrent?' is-current':'')+'">'+monthTitle+(isCurrent?'　（今月）':'')+'</div>'+
+    '<div class="mycal-grid">'+cellsHtml+'</div>'+
+  '</div>';
+}
+
+function renderMyCalendar() {
+  var scrollEl = qs('#mycal-scroll');
+  if (!scrollEl) return;
+  var today = todayStr().substring(0,7);
+  // 過去3ヶ月〜未来6ヶ月の合計10ヶ月を縦に並べる
+  var months = [];
+  for (var i = -3; i <= 6; i++) {
+    months.push(shiftMonth(today, i));
+  }
+  var html = months.map(buildMonthBlockHtml).join('');
+  scrollEl.innerHTML = html;
+
+  // クリック委譲
+  scrollEl.onclick = function(e){
+    var evEl = e.target.closest('.mycal-evt-personal');
+    if (evEl) {
+      e.stopPropagation();
+      openMyCalEventModal(evEl.dataset.eid);
+      return;
+    }
+    var autoEl = e.target.closest('.mycal-evt-auto');
+    if (autoEl) {
+      e.stopPropagation();
+      toast('現場タスクの自動表示です（編集はダッシュボードから）');
+      return;
+    }
+    var cell = e.target.closest('.mycal-day');
+    if (cell) {
       openMyCalEventModal(null, cell.dataset.ymd);
-    });
-  });
+    }
+  };
+
+  // 今月のブロックまでスクロール
+  setTimeout(function(){
+    var curBlock = scrollEl.querySelector('.mycal-month-block[data-mk="'+today+'"]');
+    if (curBlock) curBlock.scrollIntoView({ behavior: 'auto', block: 'start' });
+  }, 30);
 }
 
 function openMyCalEventModal(eventId, defaultDate) {
@@ -5754,13 +5798,13 @@ document.addEventListener('DOMContentLoaded', function(){
   if (mwCloseBtn) mwCloseBtn.addEventListener('click', function(){ qs('#modal-missing-workers').classList.add('hidden'); });
 
   // マイカレンダー
-  var mcPrev = qs('#mycal-prev');
-  var mcNext = qs('#mycal-next');
   var mcToday = qs('#mycal-today');
   var mcAdd = qs('#btn-mycal-add');
-  if (mcPrev) mcPrev.addEventListener('click', function(){ state.calMonth = shiftMonth(curCalMonth(), -1); renderMyCalendar(); });
-  if (mcNext) mcNext.addEventListener('click', function(){ state.calMonth = shiftMonth(curCalMonth(), 1); renderMyCalendar(); });
-  if (mcToday) mcToday.addEventListener('click', function(){ state.calMonth = todayStr().substring(0,7); renderMyCalendar(); });
+  if (mcToday) mcToday.addEventListener('click', function(){
+    var scrollEl = qs('#mycal-scroll');
+    var curBlock = scrollEl && scrollEl.querySelector('.mycal-month-block[data-mk="'+todayStr().substring(0,7)+'"]');
+    if (curBlock) curBlock.scrollIntoView({ behavior:'smooth', block:'start' });
+  });
   if (mcAdd) mcAdd.addEventListener('click', function(){ openMyCalEventModal(null); });
   // 色選択
   qsa('.mycal-color-opt').forEach(function(el){
