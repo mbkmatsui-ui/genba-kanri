@@ -4741,15 +4741,10 @@ function renderSchedule() {
       'box-shadow:0 2px 8px rgba(0,0,0,.25);';
     var nameDiv=document.createElement('div');
     nameDiv.style.cssText='font-size:11px;font-weight:700;color:#fff;line-height:1.35;'+
-      'display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;'+
-      'text-shadow:0 1px 3px rgba(0,0,0,.3);flex:1;';
+      'display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;'+
+      'text-shadow:0 1px 3px rgba(0,0,0,.3);flex:1;display:flex;align-items:center;justify-content:center;text-align:center;';
     nameDiv.textContent=proj.name;
-    var badge=document.createElement('span');
-    badge.style.cssText='font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;'+
-      'background:rgba(255,255,255,.28);color:#fff;align-self:flex-start;flex-shrink:0;margin-top:3px;';
-    badge.textContent=proj.isArchived?'削除済':(statusLblMap[proj.status]||proj.status);
     tile.appendChild(nameDiv);
-    tile.appendChild(badge);
     hdr.appendChild(tile);
     if (!proj.isArchived) {
       hdr.addEventListener('click',function(){
@@ -5024,15 +5019,10 @@ function renderScheduleByAssignee() {
       'box-shadow:0 2px 8px rgba(0,0,0,.25);';
     var nameDiv = document.createElement('div');
     nameDiv.style.cssText = 'font-size:11px;font-weight:700;color:#fff;line-height:1.35;'+
-      'display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;'+
-      'text-shadow:0 1px 3px rgba(0,0,0,.3);flex:1;';
+      'display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;'+
+      'text-shadow:0 1px 3px rgba(0,0,0,.3);flex:1;display:flex;align-items:center;justify-content:center;text-align:center;';
     nameDiv.textContent = proj.name;
-    var taskCount = myTasks.filter(function(t){ return t.projectId===proj.id; }).length;
-    var badge = document.createElement('span');
-    badge.style.cssText = 'font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;'+
-      'background:rgba(255,255,255,.85);color:#222;align-self:flex-start;flex-shrink:0;margin-top:2px;';
-    badge.textContent = (statusLblMap[proj.status]||'') + ' / ' + taskCount + 'タスク';
-    tile.appendChild(nameDiv); tile.appendChild(badge);
+    tile.appendChild(nameDiv);
     hdr.appendChild(tile);
     hdr.addEventListener('click', function(){
       state.selectedProjectId = proj.id;
