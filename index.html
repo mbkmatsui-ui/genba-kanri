@@ -241,6 +241,18 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .gantt-container .arrow-label { font-size: 11px; color: #c0392b; font-weight: 700; line-height: 1.1; white-space: nowrap; padding: 1px 4px; text-align: left; cursor: default; }
 .gantt-container .arrow-line { position: absolute; left: 6px; right: 14px; bottom: 3px; height: 0; border-top: 1.2px solid #111; }
 .gantt-container .arrow-head { position: absolute; right: 6px; bottom: 0; width: 0; height: 0; border-left: 7px solid #111; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
+.gantt-container .print-gantt tbody td.task-cell { cursor: pointer; }
+.gantt-container .print-gantt tbody td.task-cell:hover { outline: 1px dashed #4a90e2; outline-offset: -1px; }
+.gantt-container .print-gantt tbody td.task-name-cell[contenteditable="true"]:focus { background:#fffdf0; outline:1.5px dashed #888; }
+.gantt-container .arrow-label { pointer-events: auto; cursor: text; outline: none; min-width: 30px; }
+.gantt-container .arrow-label:focus { background:#fffdf0; outline:1px dashed #c0392b; }
+.gantt-container .arrow-del { position:absolute; top:-2px; right:-2px; width:18px; height:18px; border-radius:50%; background:#c0392b; color:#fff; border:1px solid #fff; font-size:10px; font-weight:700; cursor:pointer; line-height:1; padding:0; pointer-events:auto; z-index:3; display:flex; align-items:center; justify-content:center; }
+.gantt-container .arrow-del:hover { background:#e74c3c; }
+.gantt-container .gantt-edit-help { background:#fef9e7; border-left:3px solid #d97706; color:#7d6608; padding:8px 14px; margin:0 0 10px; font-size:12px; line-height:1.6; border-radius:0 6px 6px 0; }
+.gantt-container .print-page { min-width: 980px; }
+@media (max-width: 768px) {
+  .gantt-container .gantt-edit-help { font-size:11px; padding:6px 10px; }
+}
 .gantt-inner { display: flex; min-width: 100%; }
 .gantt-task-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface); position: sticky; left: 0; z-index: 10; }
 .gantt-col-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); background: var(--bg-raised); }
@@ -3112,6 +3124,81 @@ function buildPrintableGanttHtml(p, opts) {
   '</div>';
 }
 
+// ガント編集UI（矢印の伸縮・削除）を任意のコンテナに装着する共通ヘルパー
+function wireGanttEditor(containerEl) {
+  function rebuildArrow(row, allCells, start, end, savedLabel) {
+    allCells.forEach(function(c){
+      c.classList.remove('range-start', 'in-arrow');
+      var aw = c.querySelector('.arrow-wrap');
+      if (aw) aw.remove();
+    });
+    if (start < 0 || end < 0) return;
+    var labelText;
+    if (savedLabel != null) {
+      labelText = savedLabel;
+    } else {
+      var nameTxt = ((row.querySelector('.task-name-cell')||{}).textContent || '').trim();
+      labelText = nameTxt ? '・'+nameTxt : '・編集してください';
+    }
+    var span = end - start + 1;
+    var aw = document.createElement('div');
+    aw.className = 'arrow-wrap';
+    aw.style.width = (span*100)+'%';
+    aw.dataset.arrowRow = row.dataset.rowIdx;
+    aw.innerHTML = '<div class="arrow-label" contenteditable="true" spellcheck="false">'+escHtml(labelText)+'</div>'+
+      '<button class="arrow-del" title="矢印を削除" type="button">✕</button>'+
+      '<div class="arrow-line"></div>'+
+      '<div class="arrow-head"></div>';
+    allCells[start].appendChild(aw);
+    for (var i=start; i<=end; i++) allCells[i].classList.add('in-arrow');
+  }
+  containerEl.addEventListener('click', function(e){
+    var del = e.target.closest('.arrow-del');
+    if (del) {
+      e.stopPropagation();
+      var row = del.closest('tr');
+      var allCells = Array.from(row.querySelectorAll('.task-cell'));
+      rebuildArrow(row, allCells, -1, -1);
+      return;
+    }
+    if (e.target.closest('.arrow-label')) return;
+    if (e.target.closest('.task-name-cell')) return;
+    var cell = e.target.closest('.task-cell');
+    if (!cell) return;
+    var row = cell.closest('tr');
+    if (!row) return;
+    var allCells = Array.from(row.querySelectorAll('.task-cell'));
+    var clickedIdx = allCells.indexOf(cell);
+    var existingStart = -1, existingEnd = -1;
+    var existingLabel = null;
+    allCells.forEach(function(c, i){
+      if (c.classList.contains('in-arrow')) {
+        if (existingStart < 0) existingStart = i;
+        existingEnd = i;
+      }
+      var lbl = c.querySelector('.arrow-label');
+      if (lbl && existingLabel === null) existingLabel = lbl.textContent;
+    });
+    if (existingStart < 0) {
+      rebuildArrow(row, allCells, clickedIdx, clickedIdx);
+      return;
+    }
+    if (clickedIdx < existingStart) {
+      rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
+    } else if (clickedIdx > existingEnd) {
+      rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
+    } else {
+      var distToStart = clickedIdx - existingStart;
+      var distToEnd   = existingEnd - clickedIdx;
+      if (distToStart < distToEnd) {
+        rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
+      } else {
+        rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
+      }
+    }
+  });
+}
+
 function getPrintableGanttCSS() {
   return '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}'+
     'body{font-family:"Hiragino Sans","Yu Gothic","Meiryo",sans-serif;color:#222;background:#fff;padding:18px;font-size:11px}'+
@@ -3182,95 +3269,9 @@ function openShareGanttDialog() {
     '</div>';
   document.body.appendChild(ov);
 
-  // 矢印の編集：1タップで自動的に伸ばす／縮める
+  // 矢印の編集：共通ヘルパーで装着
   var preview = qs('#sg-preview');
-
-  function rebuildArrow(row, allCells, start, end, savedLabel) {
-    // 既存の矢印を消去
-    allCells.forEach(function(c){
-      c.classList.remove('range-start', 'in-arrow');
-      var aw = c.querySelector('.arrow-wrap');
-      if (aw) aw.remove();
-    });
-    if (start < 0 || end < 0) return; // 矢印を完全削除
-    // ラベルテキスト：保持されていればそれ、なければタスク名から
-    var labelText;
-    if (savedLabel != null) {
-      labelText = savedLabel;
-    } else {
-      var nameTxt = ((row.querySelector('.task-name-cell')||{}).textContent || '').trim();
-      labelText = nameTxt ? '・'+nameTxt : '・編集してください';
-    }
-    var span = end - start + 1;
-    var aw = document.createElement('div');
-    aw.className = 'arrow-wrap';
-    aw.style.width = (span*100)+'%';
-    aw.dataset.arrowRow = row.dataset.rowIdx;
-    aw.innerHTML = '<div class="arrow-label" contenteditable="true" spellcheck="false">'+escHtml(labelText)+'</div>'+
-      '<button class="arrow-del" title="矢印を削除" type="button">✕</button>'+
-      '<div class="arrow-line"></div>'+
-      '<div class="arrow-head"></div>';
-    allCells[start].appendChild(aw);
-    for (var i=start; i<=end; i++) allCells[i].classList.add('in-arrow');
-  }
-
-  preview.addEventListener('click', function(e){
-    // 矢印削除ボタン
-    var del = e.target.closest('.arrow-del');
-    if (del) {
-      e.stopPropagation();
-      var row = del.closest('tr');
-      var allCells = Array.from(row.querySelectorAll('.task-cell'));
-      rebuildArrow(row, allCells, -1, -1);
-      return;
-    }
-    // 編集可能テキストはスキップ
-    if (e.target.closest('.arrow-label')) return;
-    if (e.target.closest('.task-name-cell')) return;
-    var cell = e.target.closest('.task-cell');
-    if (!cell) return;
-    var row = cell.closest('tr');
-    if (!row) return;
-    var allCells = Array.from(row.querySelectorAll('.task-cell'));
-    var clickedIdx = allCells.indexOf(cell);
-
-    // 既存の矢印範囲を検出
-    var existingStart = -1, existingEnd = -1;
-    var existingLabel = null;
-    allCells.forEach(function(c, i){
-      if (c.classList.contains('in-arrow')) {
-        if (existingStart < 0) existingStart = i;
-        existingEnd = i;
-      }
-      var lbl = c.querySelector('.arrow-label');
-      if (lbl && existingLabel === null) existingLabel = lbl.textContent;
-    });
-
-    if (existingStart < 0) {
-      // 矢印なし → そのセル1日だけの矢印を作る
-      rebuildArrow(row, allCells, clickedIdx, clickedIdx);
-      return;
-    }
-    // 既存矢印あり：自動的に伸縮
-    if (clickedIdx < existingStart) {
-      // 左側へ伸ばす
-      rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
-    } else if (clickedIdx > existingEnd) {
-      // 右側へ伸ばす
-      rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
-    } else {
-      // 矢印内をタップ：近いほうの端を縮める
-      var distToStart = clickedIdx - existingStart;
-      var distToEnd   = existingEnd - clickedIdx;
-      if (distToStart < distToEnd) {
-        // 開始側に近い → 開始を縮める
-        rebuildArrow(row, allCells, clickedIdx, existingEnd, existingLabel);
-      } else {
-        // 終了側に近い（or 同じ）→ 終了を縮める
-        rebuildArrow(row, allCells, existingStart, clickedIdx, existingLabel);
-      }
-    }
-  });
+  wireGanttEditor(preview);
 
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   qs('#sg-close').addEventListener('click', function(){ ov.remove(); });
@@ -4529,11 +4530,16 @@ function renderGantt() {
     sel.value = p.id;
   }
 
-  // 印刷風レイアウトで表示（カレンダー表示は廃止）
+  // 印刷風レイアウトで編集可能な工程表を表示
   var tasks = getViewingTasks();
   var grid = qs('#gantt-grid');
-  grid.style.cssText = '';
-  grid.innerHTML = buildPrintableGanttHtml(p, { readOnly: true, tasks: tasks });
+  grid.style.cssText = 'min-width:max-content;';
+  // 編集可能版（送信・印刷ダイアログと同じUI）
+  grid.innerHTML = '<div class="gantt-edit-help">✏️ <strong>編集できる箇所</strong>：左の「タスク名」と矢印上の<span style="color:#c0392b;font-weight:700">赤い注記</span>をタップして書き換え可。'+
+    '矢印より外側のセルをタップ → そこまで自動で伸びる。内側のセル → 近い方の端が縮む。矢印を消すには右の✕。</div>'+
+    buildPrintableGanttHtml(p, { readOnly: false, tasks: tasks });
+  // 編集UIをセットアップ
+  wireGanttEditor(grid);
   renderPhotoGallery();
   var zp = qs('#gantt-zoom-pct'); if (zp) zp.textContent = Math.round(state.ganttZoom*100)+'%';
   return;
