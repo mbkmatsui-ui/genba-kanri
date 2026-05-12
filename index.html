@@ -4523,7 +4523,19 @@ function renderGantt() {
   var tasks = getViewingTasks();
   var grid = qs('#gantt-grid');
   grid.style.cssText = 'min-width:max-content;';
-  grid.innerHTML = buildPrintableGanttHtml(p, { readOnly: true, tasks: tasks });
+  try {
+    var html = buildPrintableGanttHtml(p, { readOnly: true, tasks: tasks });
+    // タスクが無い場合は案内メッセージを追加
+    if (!tasks || tasks.length === 0) {
+      html = html + '<div style="padding:24px;text-align:center;color:var(--text-muted);font-size:13px;background:#f9f9f9;border:1px dashed #ccc;margin:14px;border-radius:8px">'+
+        'この案件にはまだタスクがありません。<br>右上の「<strong>タスク追加</strong>」ボタンから追加してください。'+
+      '</div>';
+    }
+    grid.innerHTML = html;
+  } catch(err) {
+    console.error('renderGantt error:', err);
+    grid.innerHTML = '<div style="padding:24px;color:#b83c3c">工程表の描画に失敗しました：'+escHtml(err.message||'unknown')+'</div>';
+  }
   renderPhotoGallery();
   var zp = qs('#gantt-zoom-pct'); if (zp) zp.textContent = Math.round(state.ganttZoom*100)+'%';
   return;
