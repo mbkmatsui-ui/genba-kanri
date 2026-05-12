@@ -225,7 +225,9 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .gantt-container .print-period { font-size: 12px; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
 .gantt-container .print-sub { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; font-weight: 700; gap: 12px; flex-wrap: wrap; }
 .gantt-container .print-warn { color: #c0392b; font-weight: 600; }
-.gantt-container .print-gantt { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.gantt-container .print-gantt { width: auto; border-collapse: collapse; table-layout: auto; }
+.gantt-container .print-gantt thead th.cat-hdr, .gantt-container .print-gantt tbody td.task-name-cell { min-width: 140px; width: 140px; max-width: 140px; }
+.gantt-container .print-gantt thead th.dow-cell, .gantt-container .print-gantt tbody td.task-cell, .gantt-container .print-gantt thead td.date-cell { min-width: 28px; width: 28px; max-width: 28px; }
 .gantt-container .print-gantt th, .gantt-container .print-gantt td { border: 0.6px solid #999; padding: 0; text-align: center; vertical-align: middle; background: #fff; font-weight: 400; box-sizing: border-box; }
 .gantt-container .print-gantt thead th, .gantt-container .print-gantt thead td { background: #e9e9e9; font-weight: 600; height: 22px; font-size: 11px; }
 .gantt-container .print-gantt thead th.cat-hdr { background: #d8d8d8; width: 140px; font-size: 12px; }
@@ -241,7 +243,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .gantt-container .arrow-label { font-size: 11px; color: #c0392b; font-weight: 700; line-height: 1.1; white-space: nowrap; padding: 1px 4px; text-align: left; cursor: default; }
 .gantt-container .arrow-line { position: absolute; left: 6px; right: 14px; bottom: 3px; height: 0; border-top: 1.2px solid #111; }
 .gantt-container .arrow-head { position: absolute; right: 6px; bottom: 0; width: 0; height: 0; border-left: 7px solid #111; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
-.gantt-container .print-page { min-width: 980px; }
+.gantt-container .print-page { width: max-content; min-width: 100%; }
+.gantt-container { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
 .gantt-inner { display: flex; min-width: 100%; }
 .gantt-task-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface); position: sticky; left: 0; z-index: 10; }
 .gantt-col-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); background: var(--bg-raised); }
