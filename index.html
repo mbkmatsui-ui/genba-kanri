@@ -218,6 +218,29 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .size-pct { min-width:42px; text-align:center; font-size:11px; font-weight:700; color:var(--text-sub); cursor:pointer; padding:2px 4px; border-radius:4px; transition:background .15s; }
 .size-pct:hover { background:var(--bg-raised); color:var(--primary); }
 .gantt-container { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; }
+/* 工程表（印刷風レイアウト） — 案件選択時のメイン表示 */
+.gantt-container .print-page { padding: 12px 16px; background: #fff; font-family: "Hiragino Sans","Yu Gothic","Meiryo",sans-serif; color: #222; font-size: 11px; }
+.gantt-container .print-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 1.5px solid #222; padding-bottom: 6px; margin-bottom: 8px; gap: 12px; }
+.gantt-container .print-name { font-size: 18px; font-weight: 700; }
+.gantt-container .print-period { font-size: 12px; font-weight: 600; letter-spacing: .04em; white-space: nowrap; }
+.gantt-container .print-sub { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 11px; font-weight: 700; gap: 12px; flex-wrap: wrap; }
+.gantt-container .print-warn { color: #c0392b; font-weight: 600; }
+.gantt-container .print-gantt { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.gantt-container .print-gantt th, .gantt-container .print-gantt td { border: 0.6px solid #999; padding: 0; text-align: center; vertical-align: middle; background: #fff; font-weight: 400; box-sizing: border-box; }
+.gantt-container .print-gantt thead th, .gantt-container .print-gantt thead td { background: #e9e9e9; font-weight: 600; height: 22px; font-size: 11px; }
+.gantt-container .print-gantt thead th.cat-hdr { background: #d8d8d8; width: 140px; font-size: 12px; }
+.gantt-container .print-gantt thead th.month-cell { font-size: 13px; font-weight: 700; text-align: left; padding-left: 6px; background: #fff; border-bottom: none; }
+.gantt-container .print-gantt .dow-cell.sun, .gantt-container .print-gantt .date-cell.sun { background: #bdbdbd; color: #7c0000; }
+.gantt-container .print-gantt .dow-cell.sat, .gantt-container .print-gantt .date-cell.sat { background: #cccccc; color: #1a3a8a; }
+.gantt-container .print-gantt tbody td.task-name-cell { background: #f6f6f6; font-weight: 700; text-align: center; padding: 0 6px; font-size: 12px; width: 140px; }
+.gantt-container .print-gantt tbody td.task-cell { height: 24px; position: relative; background: #eafff0; }
+.gantt-container .print-gantt tbody tr:nth-child(odd) td.task-cell { background: #f3fff7; }
+.gantt-container .print-gantt tbody td.task-cell.sun { background: #bdbdbd; }
+.gantt-container .print-gantt tbody td.task-cell.sat { background: #cccccc; }
+.gantt-container .arrow-wrap { position: absolute; top: 0; left: 0; height: 100%; display: flex; flex-direction: column; justify-content: center; pointer-events: none; z-index: 2; }
+.gantt-container .arrow-label { font-size: 11px; color: #c0392b; font-weight: 700; line-height: 1.1; white-space: nowrap; padding: 1px 4px; text-align: left; cursor: default; }
+.gantt-container .arrow-line { position: absolute; left: 6px; right: 14px; bottom: 3px; height: 0; border-top: 1.2px solid #111; }
+.gantt-container .arrow-head { position: absolute; right: 6px; bottom: 0; width: 0; height: 0; border-left: 7px solid #111; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
 .gantt-inner { display: flex; min-width: 100%; }
 .gantt-task-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface); position: sticky; left: 0; z-index: 10; }
 .gantt-col-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); background: var(--bg-raised); }
@@ -2973,8 +2996,10 @@ function renderMaterialAlert() {
 }
 
 // ===== 工程表の送信・印刷 =====
-function buildPrintableGanttHtml(p) {
-  var tasks = (data.tasks||[]).filter(function(t){ return t.projectId === p.id; });
+function buildPrintableGanttHtml(p, opts) {
+  opts = opts || {};
+  var readOnly = !!opts.readOnly;
+  var tasks = opts.tasks || (data.tasks||[]).filter(function(t){ return t.projectId === p.id; });
   // 表示日付範囲：プロジェクトの着工〜竣工。なければタスクから推定。
   var startStr = p.startDate;
   var endStr   = p.endDate;
@@ -3035,26 +3060,31 @@ function buildPrintableGanttHtml(p) {
       var attrs = ' data-row="'+rowIdx+'" data-col="'+i+'"' + (inArrow?' data-in-arrow="1"':'');
       if (i === startIdx) {
         var span = endIdx - startIdx + 1;
+        var labelAttrs = readOnly ? '' : 'contenteditable="true" spellcheck="false"';
+        var delBtn = readOnly ? '' : '<button class="arrow-del" title="矢印を削除" type="button">✕</button>';
         content = '<div class="arrow-wrap" style="width:'+(span*100)+'%" data-arrow-row="'+rowIdx+'">'+
-          '<div class="arrow-label" contenteditable="true" spellcheck="false">・'+escHtml(t.name)+'</div>'+
-          '<button class="arrow-del" title="矢印を削除" type="button">✕</button>'+
+          '<div class="arrow-label" '+labelAttrs+'>・'+escHtml(t.name)+'</div>'+
+          delBtn+
           '<div class="arrow-line"></div>'+
           '<div class="arrow-head"></div>'+
         '</div>';
       }
       return '<td class="task-cell '+cls+(inArrow?' in-arrow':'')+'"'+attrs+'>'+content+'</td>';
     }).join('');
-    var nameCell = '<td class="task-name-cell" data-row="'+rowIdx+'" contenteditable="true" spellcheck="false">'+escHtml(t.name)+'</td>';
+    var nameAttrs = readOnly ? '' : 'contenteditable="true" spellcheck="false"';
+    var nameCell = '<td class="task-name-cell" data-row="'+rowIdx+'" '+nameAttrs+'>'+escHtml(t.name)+'</td>';
     rows += '<tr data-row-idx="'+rowIdx+'">'+nameCell+taskCells+'</tr>';
   });
-  // 空白の予備行（見栄え用に8行追加・編集可能）
-  for (var fr=0; fr<8; fr++) {
-    var fillerCells = days.map(function(d){
-      var dow = new Date(d+'T00:00:00').getDay();
-      var cls = dow===0?'sun':dow===6?'sat':'';
-      return '<td class="task-cell '+cls+'" data-row="extra'+fr+'"></td>';
-    }).join('');
-    rows += '<tr data-row-idx="extra'+fr+'"><td class="task-name-cell" contenteditable="true" spellcheck="false"></td>'+fillerCells+'</tr>';
+  // 編集モードのみ予備行を追加（閲覧モードでは不要）
+  if (!readOnly) {
+    for (var fr=0; fr<8; fr++) {
+      var fillerCells = days.map(function(d){
+        var dow = new Date(d+'T00:00:00').getDay();
+        var cls = dow===0?'sun':dow===6?'sat':'';
+        return '<td class="task-cell '+cls+'" data-row="extra'+fr+'"></td>';
+      }).join('');
+      rows += '<tr data-row-idx="extra'+fr+'"><td class="task-name-cell" contenteditable="true" spellcheck="false"></td>'+fillerCells+'</tr>';
+    }
   }
 
   var sd = p.startDate||startStr;
@@ -4480,7 +4510,11 @@ function switchGanttTab(tab) {
 
 function renderGantt() {
   var p = getViewingProject();
-  if(!p){ qs('#gantt-project-name').textContent='プロジェクトを選択'; return; }
+  if(!p){
+    qs('#gantt-project-name').textContent='プロジェクトを選択';
+    var g0 = qs('#gantt-grid'); if (g0) g0.innerHTML='';
+    return;
+  }
   qs('#gantt-project-name').textContent=p.name + (state.viewingArchivedId ? '（完了済 / 閲覧専用）' : '');
   // selectセレクトに archived id があるとは限らないので空にする
   var sel = qs('#gantt-project-select');
@@ -4495,133 +4529,14 @@ function renderGantt() {
     sel.value = p.id;
   }
 
-  var range=getRange(); var days=buildDays(range.start,range.end);
-  var rh=CELL_W[state.ganttScale]; // row height per day
-  var today=todayStr();
+  // 印刷風レイアウトで表示（カレンダー表示は廃止）
   var tasks = getViewingTasks();
-  var DOW=['日','月','火','水','木','金','土'];
-  var DATE_W=56; var TASK_W=110;
-
-  var grid=qs('#gantt-grid'); grid.innerHTML='';
-  grid.style.cssText='display:grid;grid-template-columns:'+DATE_W+'px '+
-    (tasks.length?'repeat('+tasks.length+','+TASK_W+'px)':'1fr')+
-    ';min-width:max-content;position:relative;';
-
-  // Corner
-  var corner=document.createElement('div');
-  corner.style.cssText='position:sticky;top:0;left:0;z-index:30;background:var(--bg-raised);'+
-    'border-right:2px solid var(--border);border-bottom:2px solid var(--border);'+
-    'font-size:10px;font-weight:700;color:var(--text-muted);display:flex;align-items:center;'+
-    'justify-content:center;height:60px;box-sizing:border-box;';
-  corner.textContent='日付';
-  grid.appendChild(corner);
-
-  // Task header cells
-  tasks.forEach(function(task){
-    var sc=statusColor(task.status);
-    var isSel=task.id===state.selectedTaskId;
-    var hdr=document.createElement('div');
-    hdr.style.cssText='position:sticky;top:0;z-index:20;border-right:1px solid var(--border-lt);'+
-      'border-bottom:2px solid var(--border);border-top:3px solid '+sc+';'+
-      'padding:6px 6px 4px;overflow:hidden;height:60px;box-sizing:border-box;cursor:pointer;'+
-      'display:flex;flex-direction:column;gap:2px;background:'+(isSel?'color-mix(in srgb,'+sc+' 18%,var(--bg-raised))':'var(--bg-raised)')+';';
-    hdr.innerHTML=
-      '<div style="display:flex;align-items:center;gap:5px;overflow:hidden">'+
-        getTaskIconSVG(task.name,28)+
-        '<div style="overflow:hidden;min-width:0">'+
-          '<div style="font-size:10px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+task.name+'</div>'+
-          '<div style="font-size:11px;font-weight:700;color:'+sc+'">'+task.progress+'%</div>'+
-        '</div>'+
-      '</div>';
-    hdr.addEventListener('click',function(){ selectTask(task.id); });
-    grid.appendChild(hdr);
-  });
-
-  // Day rows
-  var curMonth='';
-  days.forEach(function(d){
-    var dow=new Date(d+'T00:00:00').getDay();
-    var isWkend=dow===0||dow===6;
-    var isToday=d===today;
-    var month=d.slice(0,7);
-
-    // Month separator row
-    if(month!==curMonth){
-      curMonth=month;
-      var mp=month.split('-');
-      var mlbl=document.createElement('div');
-      mlbl.style.cssText='position:sticky;left:0;z-index:10;background:var(--bg-raised);'+
-        'border-right:2px solid var(--border);border-bottom:1px solid var(--border);'+
-        'border-top:1px solid var(--border);font-size:10px;font-weight:700;color:var(--text);'+
-        'padding:0 6px;display:flex;align-items:center;height:20px;white-space:nowrap;';
-      mlbl.textContent=mp[0]+'年'+parseInt(mp[1])+'月';
-      grid.appendChild(mlbl);
-      for(var ti=0;ti<tasks.length;ti++){
-        var mc=document.createElement('div');
-        mc.style.cssText='background:var(--bg-raised);border-right:1px solid var(--border-lt);'+
-          'border-bottom:1px solid var(--border);border-top:1px solid var(--border);height:20px;';
-        grid.appendChild(mc);
-      }
-    }
-
-    // Date label cell
-    var dlbl=document.createElement('div');
-    var dateBg=isToday?'background:#2563eb;color:#fff;':
-      isWkend?'background:rgba(220,60,60,.07);color:'+(dow===0?'#dc2626':'#7c3aed')+';':
-      'background:var(--bg-surface);color:var(--text);';
-    var ganttInline = rh < 26;
-    var effRhG = rh * (state.ganttZoom || 1);
-    var hideDowG = effRhG < 11;
-    dlbl.style.cssText='position:sticky;left:0;z-index:10;'+
-      'border-right:2px solid var(--border);border-bottom:1px solid var(--border-lt);'+
-      'display:flex;'+(ganttInline?'flex-direction:row;gap:3px;':'flex-direction:column;gap:0;')+
-      'align-items:center;justify-content:center;'+
-      'height:'+rh+'px;box-sizing:border-box;'+dateBg;
-    var gDateFs = ganttInline ? 10 : (rh>=28?13:10);
-    dlbl.innerHTML='<span style="font-size:'+gDateFs+'px;font-weight:700;line-height:1.1">'+parseInt(d.split('-')[2])+'</span>'+
-      (hideDowG ? '' : '<span style="font-size:9px;line-height:1.1;opacity:.8">'+DOW[dow]+'</span>');
-    grid.appendChild(dlbl);
-
-    // Task cells
-    tasks.forEach(function(task){
-      var inRange=task.startDate&&task.endDate&&d>=task.startDate&&d<=task.endDate;
-      var isStart=task.startDate&&d===task.startDate;
-      var isEnd=task.endDate&&d===task.endDate;
-      var sc=statusColor(task.status);
-      var cell=document.createElement('div');
-      // 期間内セルの背景色を濃くして視認性を改善（1a→55: 33%透明度）
-      var cellBg=inRange?sc+'55':(isWkend?'rgba(220,60,60,.035)':(isToday?'rgba(37,99,235,.06)':''));
-      cell.style.cssText='border-right:1px solid var(--border-lt);border-bottom:1px solid var(--border-lt);'+
-        'height:'+rh+'px;box-sizing:border-box;position:relative;overflow:hidden;cursor:pointer;'+
-        (cellBg?'background:'+cellBg+';':'')+
-        (inRange&&isStart?'border-top:3px solid '+sc+';':'')+
-        (inRange&&isEnd?'border-bottom:3px solid '+sc+';':'');
-      if(task.id===state.selectedTaskId&&inRange) cell.style.background=sc+'88';
-      if(inRange){
-        var fill=document.createElement('div');
-        // 進捗バー：進捗0%でも左端に細い帯を出す（視認性のため最低3%）
-        var fillW = Math.max(task.progress||0, 0);
-        fill.style.cssText='position:absolute;left:0;top:0;bottom:0;width:'+fillW+'%;'+
-          'background:'+sc+'66;pointer-events:none;';
-        cell.appendChild(fill);
-        if(isStart&&rh>=24){
-          var lbl=document.createElement('div');
-          lbl.style.cssText='position:absolute;left:0;right:0;top:1px;font-size:8px;font-weight:700;'+
-            'color:'+sc+';padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'+
-            'z-index:1;text-align:center;line-height:1.2;';
-          lbl.textContent=task.name;
-          cell.appendChild(lbl);
-        }
-      }
-      cell.addEventListener('click',function(){ selectTask(task.id); });
-      grid.appendChild(cell);
-    });
-  });
-
+  var grid = qs('#gantt-grid');
+  grid.style.cssText = '';
+  grid.innerHTML = buildPrintableGanttHtml(p, { readOnly: true, tasks: tasks });
   renderPhotoGallery();
-  // ズームを適用（モバイルで縮小表示）
-  qs('#gantt-grid').style.zoom = state.ganttZoom;
-  qs('#gantt-zoom-pct').textContent = Math.round(state.ganttZoom*100)+'%';
+  var zp = qs('#gantt-zoom-pct'); if (zp) zp.textContent = Math.round(state.ganttZoom*100)+'%';
+  return;
 }
 
 function selectTask(id) {
