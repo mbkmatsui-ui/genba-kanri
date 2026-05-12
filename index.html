@@ -241,18 +241,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .gantt-container .arrow-label { font-size: 11px; color: #c0392b; font-weight: 700; line-height: 1.1; white-space: nowrap; padding: 1px 4px; text-align: left; cursor: default; }
 .gantt-container .arrow-line { position: absolute; left: 6px; right: 14px; bottom: 3px; height: 0; border-top: 1.2px solid #111; }
 .gantt-container .arrow-head { position: absolute; right: 6px; bottom: 0; width: 0; height: 0; border-left: 7px solid #111; border-top: 4px solid transparent; border-bottom: 4px solid transparent; }
-.gantt-container .print-gantt tbody td.task-cell { cursor: pointer; }
-.gantt-container .print-gantt tbody td.task-cell:hover { outline: 1px dashed #4a90e2; outline-offset: -1px; }
-.gantt-container .print-gantt tbody td.task-name-cell[contenteditable="true"]:focus { background:#fffdf0; outline:1.5px dashed #888; }
-.gantt-container .arrow-label { pointer-events: auto; cursor: text; outline: none; min-width: 30px; }
-.gantt-container .arrow-label:focus { background:#fffdf0; outline:1px dashed #c0392b; }
-.gantt-container .arrow-del { position:absolute; top:-2px; right:-2px; width:18px; height:18px; border-radius:50%; background:#c0392b; color:#fff; border:1px solid #fff; font-size:10px; font-weight:700; cursor:pointer; line-height:1; padding:0; pointer-events:auto; z-index:3; display:flex; align-items:center; justify-content:center; }
-.gantt-container .arrow-del:hover { background:#e74c3c; }
-.gantt-container .gantt-edit-help { background:#fef9e7; border-left:3px solid #d97706; color:#7d6608; padding:8px 14px; margin:0 0 10px; font-size:12px; line-height:1.6; border-radius:0 6px 6px 0; }
 .gantt-container .print-page { min-width: 980px; }
-@media (max-width: 768px) {
-  .gantt-container .gantt-edit-help { font-size:11px; padding:6px 10px; }
-}
 .gantt-inner { display: flex; min-width: 100%; }
 .gantt-task-col { width: 280px; min-width: 280px; flex-shrink: 0; border-right: 1px solid var(--border); background: var(--bg-surface); position: sticky; left: 0; z-index: 10; }
 .gantt-col-header { height: 60px; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 16px; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-sub); background: var(--bg-raised); }
@@ -4530,16 +4519,11 @@ function renderGantt() {
     sel.value = p.id;
   }
 
-  // 印刷風レイアウトで編集可能な工程表を表示
+  // 印刷風レイアウトで閲覧用工程表を表示（編集は「送信・印刷」ダイアログから）
   var tasks = getViewingTasks();
   var grid = qs('#gantt-grid');
   grid.style.cssText = 'min-width:max-content;';
-  // 編集可能版（送信・印刷ダイアログと同じUI）
-  grid.innerHTML = '<div class="gantt-edit-help">✏️ <strong>編集できる箇所</strong>：左の「タスク名」と矢印上の<span style="color:#c0392b;font-weight:700">赤い注記</span>をタップして書き換え可。'+
-    '矢印より外側のセルをタップ → そこまで自動で伸びる。内側のセル → 近い方の端が縮む。矢印を消すには右の✕。</div>'+
-    buildPrintableGanttHtml(p, { readOnly: false, tasks: tasks });
-  // 編集UIをセットアップ
-  wireGanttEditor(grid);
+  grid.innerHTML = buildPrintableGanttHtml(p, { readOnly: true, tasks: tasks });
   renderPhotoGallery();
   var zp = qs('#gantt-zoom-pct'); if (zp) zp.textContent = Math.round(state.ganttZoom*100)+'%';
   return;
