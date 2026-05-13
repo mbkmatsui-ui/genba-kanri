@@ -2881,7 +2881,7 @@ function renderMaterialAlert() {
     } else if (s === 'overdue') {
       badgeText = '+' + daysOverdue + '日超過';
       extraHtml = '<div class="mal-overdue-wrap">'
-        + '<div class="mal-overdue-msg">⚠ ' + (t.supervisor||'現場主任') + 'さん、完了が確認できていません。理由のコメントをお願いします。</div>'
+        + '<div class="mal-overdue-msg">⚠ ' + (proj.assignee||'担当者') + 'さん、完了が確認できていません。理由のコメントをお願いします。</div>'
         + '<textarea class="mal-comment-input" data-tid="' + t.id + '" placeholder="理由を入力してください..."></textarea>'
         + '<button class="mal-report-btn" data-action="report" data-tid="' + t.id + '">報告する</button>'
         + '</div>';
@@ -2970,7 +2970,8 @@ function renderMaterialAlert() {
       } else if (action === 'report') {
         var ta = wrap.querySelector('textarea[data-tid="' + tid + '"]');
         var note = ta ? ta.value.trim() : '';
-        if (!note) { alert((task.supervisor||'現場主任') + 'さん、理由を入力してから報告してください。'); return; }
+        var projForAlert = data.projects.find(function(p){ return p.id === task.projectId; }) || {};
+        if (!note) { alert((projForAlert.assignee||'担当者') + 'さん、理由を入力してから報告してください。'); return; }
         var prevNote_r = task.completionNote;
         task.completionNote = note;
         saveData(data);
