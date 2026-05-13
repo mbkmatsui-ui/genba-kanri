@@ -1521,6 +1521,14 @@ body.is-admin .admin-only { display:flex; }
         現場名（タイトル）の自動取り込みと、添付ファイル（図面・書類）の添付ができます。<br>
         その他の項目（発注者・所在地・日付など）は<strong>手動</strong>で入力してください。
       </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+        <a href="https://mail.google.com/" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="font-size:12px;padding:6px 12px;text-decoration:none;display:inline-flex;align-items:center;gap:5px">
+          📧 Gmail を開く
+        </a>
+        <button type="button" class="btn btn-ghost btn-sm" id="btn-email-paste-image" style="font-size:12px;padding:6px 12px;display:inline-flex;align-items:center;gap:5px">
+          📋 画像を貼り付け
+        </button>
+      </div>
       <div style="margin-bottom:14px">
         <label style="font-size:12px;font-weight:700;color:var(--text-sub);display:block;margin-bottom:5px">メール本文（現場名のみ抽出）</label>
         <textarea id="email-import-text" rows="6" placeholder="ここにメール本文を貼り付け…&#10;&#10;「工事名：◯◯ビル 改修工事」「現場名：◯◯邸」などの行から自動抽出します" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical"></textarea>
@@ -5418,6 +5426,57 @@ function updateEmailImportPreview() {
   preview.style.display = 'block';
   preview.innerHTML = '<span style="color:var(--text-muted);font-weight:600">現場名：</span><span style="color:var(--text);font-weight:700">'+escHtml(name)+'</span>';
 }
+// クリップボードから画像を貼り付け
+function pasteImageFromClipboard() {
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    toast('お使いのブラウザは画像の貼り付けに対応していません', 'error');
+    return;
+  }
+  navigator.clipboard.read().then(function(items){
+    var found = false;
+    var promises = [];
+    items.forEach(function(item){
+      item.types.forEach(function(type){
+        if (type.indexOf('image/') === 0 && !found) {
+          found = true;
+          promises.push(item.getType(type).then(function(blob){
+            return new Promise(function(resolve){
+              var reader = new FileReader();
+              reader.onload = function(ev){
+                var ext = type.split('/')[1] || 'png';
+                _emailImportPendingFiles.push({
+                  name: '貼り付け画像_' + Date.now() + '.' + ext,
+                  type: type,
+                  size: blob.size,
+                  dataUrl: ev.target.result
+                });
+                resolve();
+              };
+              reader.readAsDataURL(blob);
+            });
+          }));
+        }
+      });
+    });
+    if (!found) {
+      toast('クリップボードに画像がありません。Gmail で画像を右クリック → 「画像をコピー」してから貼り付けてください', 'error');
+      return;
+    }
+    Promise.all(promises).then(function(){
+      renderEmailImportFilesList();
+      toast('画像を貼り付けました', 'success');
+    });
+  }).catch(function(err){
+    console.error('Clipboard read failed:', err);
+    var msg = (err && err.message) ? err.message : '不明なエラー';
+    if (msg.indexOf('permission') >= 0 || msg.indexOf('NotAllowed') >= 0) {
+      toast('クリップボードへのアクセスが拒否されました。ブラウザの権限を許可してください', 'error');
+    } else {
+      toast('貼り付けに失敗：' + msg, 'error');
+    }
+  });
+}
+
 function handleEmailImportFilesChange(e) {
   var files = e.target.files;
   if (!files) return;
@@ -6090,6 +6149,8 @@ document.addEventListener('DOMContentLoaded', function(){
   if (emailImportText) emailImportText.addEventListener('input', updateEmailImportPreview);
   var emailImportFiles = qs('#email-import-files');
   if (emailImportFiles) emailImportFiles.addEventListener('change', handleEmailImportFilesChange);
+  var emailPasteBtn = qs('#btn-email-paste-image');
+  if (emailPasteBtn) emailPasteBtn.addEventListener('click', pasteImageFromClipboard);
   qs('#btn-proj-add-task').addEventListener('click', function(){ addProjTaskRow(null); });
   qs('#btn-save-task').addEventListener('click', saveTask);
   // タスク現場主任の手動入力切替
