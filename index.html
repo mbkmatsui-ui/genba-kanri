@@ -1378,6 +1378,12 @@ body.is-admin .admin-only { display:flex; }
       <button class="modal-close">×</button>
     </div>
     <div class="modal-body">
+      <div style="margin-bottom:14px;padding:10px 12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-size:12px;color:#1e40af;font-weight:600;line-height:1.5">
+          📧 メール本文を貼り付けると自動で取り込めます
+        </div>
+        <button type="button" class="btn btn-primary btn-sm" id="btn-open-email-import" style="font-size:12px;padding:5px 12px;flex-shrink:0">メールから取り込み</button>
+      </div>
       <div class="form-group"><label>工事名 *</label><input type="text" id="proj-name" placeholder="例：〇〇ビル 外壁改修工事" /></div>
       <div class="form-group">
         <label>発注者</label>
@@ -1499,6 +1505,32 @@ body.is-admin .admin-only { display:flex; }
       <button class="btn btn-danger btn-sm" id="btn-mycal-del" style="margin-right:auto;display:none">削除</button>
       <button class="btn btn-ghost" id="btn-mycal-cancel">キャンセル</button>
       <button class="btn btn-primary" id="btn-mycal-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- メール本文から案件取り込みモーダル -->
+<div class="modal-overlay hidden" id="modal-email-import">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <h3>メール本文から案件を取り込み</h3>
+      <button class="modal-close">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:12px;color:var(--text-sub);margin-bottom:10px;line-height:1.6">
+        メールやチャットの本文をそのまま貼り付けてください。<br>
+        以下のキーワードを自動で読み取って入力欄に反映します：<br>
+        <strong>工事名／物件名／現場名</strong>、<strong>発注者／お客様／施主</strong>、<strong>所在地／住所</strong>、<strong>着工日／開始</strong>、<strong>竣工日／完了／納期</strong>
+      </p>
+      <textarea id="email-import-text" rows="10" placeholder="ここにメール本文を貼り付け…&#10;&#10;例：&#10;工事名：◯◯ビル 外壁改修工事&#10;発注者：山田建設株式会社&#10;所在地：東京都渋谷区◯◯1-2-3&#10;着工日：2026年5月20日&#10;竣工日：2026年6月15日" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-family:inherit;font-size:13px;line-height:1.5;resize:vertical"></textarea>
+      <div id="email-import-preview" style="margin-top:10px;padding:10px;background:var(--bg-surface);border-radius:6px;font-size:12px;display:none">
+        <div style="font-weight:700;margin-bottom:6px;color:var(--text)">読み取り結果プレビュー：</div>
+        <div id="email-import-fields"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-email-import-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="btn-email-import-apply">入力欄に反映</button>
     </div>
   </div>
 </div>
@@ -5352,6 +5384,143 @@ function saveClient() {
 }
 
 // ===== Project Modal =====
+// ===== メール本文から案件情報を解析 =====
+function parseEmailToProject(text) {
+  text = (text||'').replace(/\r\n/g, '\n');
+  var result = {};
+  // 工事名・物件名・現場名・件名
+  var m = text.match(/(?:工事名|物件名|現場名|案件名|プロジェクト名|件名|タイトル)\s*[：:]\s*([^\n]+)/);
+  if (m) result.name = m[1].trim();
+  // 発注者
+  m = text.match(/(?:発注者|お客様|施主|依頼者|顧客|クライアント|発注元)\s*[：:]\s*([^\n]+)/);
+  if (m) result.client = m[1].trim();
+  // 所在地
+  m = text.match(/(?:所在地|住所|現場住所|工事場所|場所|施工場所)\s*[：:]\s*([^\n]+)/);
+  if (m) result.location = m[1].trim();
+  // 担当者
+  m = text.match(/(?:担当者|担当|現場担当)\s*[：:]\s*([^\n]+)/);
+  if (m) result.assignee = m[1].trim();
+  // カテゴリ・工事種別
+  m = text.match(/(?:工事種別|種別|カテゴリ|工種)\s*[：:]\s*([^\n]+)/);
+  if (m) result.category = m[1].trim();
+
+  // 着工日（複数パターン対応）
+  var startPats = [
+    /(?:着工日|着工|開始日|工事開始|着手日|工期開始)\s*[：:]\s*([^\n]+)/,
+    /(?:工事期間|工期|施工期間|工事日程)\s*[：:]\s*([^\n～〜\-]+)/
+  ];
+  for (var i=0; i<startPats.length && !result.startDate; i++) {
+    m = text.match(startPats[i]);
+    if (m) {
+      var d = parseJapaneseDate(m[1]);
+      if (d) result.startDate = d;
+    }
+  }
+  // 竣工日
+  var endPats = [
+    /(?:竣工日|竣工|完了日|完了|引渡日|引渡|納期|完成日|完成|終了日|工期終了)\s*[：:]\s*([^\n]+)/
+  ];
+  for (var i=0; i<endPats.length && !result.endDate; i++) {
+    m = text.match(endPats[i]);
+    if (m) {
+      var d = parseJapaneseDate(m[1]);
+      if (d) result.endDate = d;
+    }
+  }
+  // 工事期間 (着工〜竣工 のように1行に書かれているパターン)
+  if (!result.startDate || !result.endDate) {
+    m = text.match(/(?:工事期間|工期|施工期間|工事日程|期間)\s*[：:]\s*([^\n]+?)\s*[〜～\-ー～から至]+\s*([^\n]+)/);
+    if (m) {
+      var sd = parseJapaneseDate(m[1]);
+      var ed = parseJapaneseDate(m[2]);
+      if (sd && !result.startDate) result.startDate = sd;
+      if (ed && !result.endDate) result.endDate = ed;
+    }
+  }
+  return result;
+}
+
+// 「2026年5月20日」「5月20日」「2026/5/20」「5/20」などを YYYY-MM-DD に変換
+function parseJapaneseDate(str) {
+  if (!str) return '';
+  str = str.replace(/\s+/g, '');
+  var m = str.match(/(\d{4})\s*[年\/\-\.]\s*(\d{1,2})\s*[月\/\-\.]\s*(\d{1,2})/);
+  if (m) return m[1]+'-'+pad2(m[2])+'-'+pad2(m[3]);
+  m = str.match(/(\d{1,2})\s*[月\/\-\.]\s*(\d{1,2})/);
+  if (m) {
+    var yr = new Date().getFullYear();
+    return yr+'-'+pad2(m[1])+'-'+pad2(m[2]);
+  }
+  m = str.match(/(令和|平成)\s*(\d{1,2})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})/);
+  if (m) {
+    var era = m[1]==='令和' ? 2018 : 1988;
+    return (era + parseInt(m[2],10))+'-'+pad2(m[3])+'-'+pad2(m[4]);
+  }
+  return '';
+}
+function pad2(n) { return String(parseInt(n,10)).padStart(2,'0'); }
+
+// メール取り込みダイアログ
+function openEmailImportModal() {
+  qs('#email-import-text').value = '';
+  qs('#email-import-preview').style.display = 'none';
+  qs('#email-import-fields').innerHTML = '';
+  qs('#modal-email-import').classList.remove('hidden');
+}
+function updateEmailImportPreview() {
+  var text = qs('#email-import-text').value;
+  var result = parseEmailToProject(text);
+  var keys = Object.keys(result);
+  var preview = qs('#email-import-preview');
+  var fields = qs('#email-import-fields');
+  if (keys.length === 0) {
+    preview.style.display = 'none';
+    return;
+  }
+  preview.style.display = 'block';
+  var labelMap = {name:'工事名', client:'発注者', location:'所在地', assignee:'担当者', category:'工事種別', startDate:'着工日', endDate:'竣工日'};
+  fields.innerHTML = keys.map(function(k){
+    return '<div style="display:flex;gap:8px;margin:3px 0"><span style="min-width:64px;color:var(--text-muted);font-weight:600">'+labelMap[k]+'</span><span style="color:var(--text);font-weight:600">'+escHtml(result[k])+'</span></div>';
+  }).join('');
+}
+function applyEmailImport() {
+  var text = qs('#email-import-text').value;
+  var result = parseEmailToProject(text);
+  var keys = Object.keys(result);
+  if (keys.length === 0) { toast('取り込める情報が見つかりませんでした','error'); return; }
+  // 工事名・所在地
+  if (result.name) qs('#proj-name').value = result.name;
+  if (result.location) qs('#proj-location').value = result.location;
+  if (result.category) qs('#proj-category').value = result.category;
+  // 担当者：選択肢にあればセレクト、なければそのまま無視（社長/汐海のみ）
+  if (result.assignee) {
+    var assigneeSel = qs('#proj-assignee');
+    if (assigneeSel) {
+      var found = Array.from(assigneeSel.options).some(function(o){ return o.value === result.assignee; });
+      if (found) assigneeSel.value = result.assignee;
+    }
+  }
+  // 発注者：既存登録があればセレクト、なければ手動入力欄
+  if (result.client) {
+    var sel = qs('#proj-client');
+    var manualInput = qs('#proj-client-manual');
+    var existing = (data.clients||[]).find(function(c){ return c.name === result.client || result.client.indexOf(c.name)>=0; });
+    if (existing) {
+      sel.value = existing.id;
+      if (manualInput) { manualInput.style.display = 'none'; manualInput.value = ''; }
+    } else if (manualInput) {
+      sel.value = '__manual__';
+      manualInput.style.display = 'block';
+      manualInput.value = result.client;
+    }
+  }
+  // 着工日・竣工日
+  if (result.startDate && typeof dpSetValue === 'function') dpSetValue('proj-start', result.startDate);
+  if (result.endDate && typeof dpSetValue === 'function') dpSetValue('proj-end', result.endDate);
+  qs('#modal-email-import').classList.add('hidden');
+  toast('取り込みました（'+keys.length+'項目）','success');
+}
+
 function openProjectModal(id) {
   var modal=qs('#modal-project');
   var p=id?data.projects.find(function(p){return p.id===id;}):null;
@@ -5934,6 +6103,17 @@ document.addEventListener('DOMContentLoaded', function(){
     renderGantt();
   });
   qs('#btn-save-project').addEventListener('click', saveProject);
+  // メールから取り込み
+  var emailImportBtn = qs('#btn-open-email-import');
+  if (emailImportBtn) emailImportBtn.addEventListener('click', openEmailImportModal);
+  var emailImportCancelBtn = qs('#btn-email-import-cancel');
+  if (emailImportCancelBtn) emailImportCancelBtn.addEventListener('click', function(){
+    qs('#modal-email-import').classList.add('hidden');
+  });
+  var emailImportApplyBtn = qs('#btn-email-import-apply');
+  if (emailImportApplyBtn) emailImportApplyBtn.addEventListener('click', applyEmailImport);
+  var emailImportText = qs('#email-import-text');
+  if (emailImportText) emailImportText.addEventListener('input', updateEmailImportPreview);
   qs('#btn-proj-add-task').addEventListener('click', function(){ addProjTaskRow(null); });
   qs('#btn-save-task').addEventListener('click', saveTask);
   // タスク現場主任の手動入力切替
