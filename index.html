@@ -4,10 +4,19 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>BuildFlow Gemba — ビルフロ現場</title>
+  <!-- PWA: マニフェスト・iOS 用メタタグ -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2e2e2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="現場管理">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon-180.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
   <!-- Firebase SDK (v10 compat) -->
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-messaging-compat.js"></script>
   <style>
 /* ===== リセット・変数 ===== */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -908,6 +917,10 @@ body.is-admin .admin-only { display:flex; }
       <span class="sync-icon" id="sync-icon">✓</span>
       <span class="sync-text" id="sync-text">同期済</span>
     </button>
+    <button class="sync-status" id="notify-toggle-btn" title="通知" style="display:none">
+      <span class="sync-icon" id="notify-icon">🔔</span>
+      <span class="sync-text" id="notify-text">通知</span>
+    </button>
     <div class="user-avatar" id="user-avatar"></div>
     <span class="user-name" id="user-name"></span>
     <button class="user-logout" id="user-logout-btn" title="ログアウト">ログアウト</button>
@@ -1689,6 +1702,106 @@ var firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 var fbAuth = firebase.auth();
 var fbDb = firebase.database();
+
+// ===== Web Push（FCM）設定 =====
+// Firebase Console > プロジェクトの設定 > Cloud Messaging > Web Push 証明書 で発行した鍵
+var FCM_VAPID_KEY = 'BBMWkhzeD_nUNPWmmKNXi6AdoEa2rBgQib6J3JgKO7o1ibWg9NYIeJ2mPdBiIpK4Ym2addoPZuAGcRjNBrjcLTA';
+var fbMessaging = null;
+try { if (firebase.messaging && firebase.messaging.isSupported && firebase.messaging.isSupported()) { fbMessaging = firebase.messaging(); } } catch(e) {}
+
+// Service Worker 登録（PWA／FCM 共通）
+var _swReg = null;
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('firebase-messaging-sw.js')
+    .then(function(reg){ _swReg = reg; })
+    .catch(function(err){ console.warn('SW register failed', err); });
+}
+
+// iOS PWA 判定（ホーム画面起動でないと iOS は Web Push を受けられない）
+function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent); }
+function isStandalonePWA() {
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || (navigator.standalone === true);
+}
+
+// FCM トークンを RTDB のユーザー領域に保存
+function saveFcmTokenToDb(token) {
+  if (!currentUser || !token) return Promise.resolve();
+  var uid = currentUser.uid;
+  var ref = fbDb.ref('fcmTokens/' + uid + '/' + token);
+  return ref.set({
+    ua: navigator.userAgent || '',
+    email: currentUser.email || '',
+    updatedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+// 通知トグルボタンの表示更新
+function updateNotifyBtn() {
+  var btn = document.getElementById('notify-toggle-btn');
+  var icon = document.getElementById('notify-icon');
+  var text = document.getElementById('notify-text');
+  if (!btn) return;
+  // FCM が使えない環境（古い iOS Safari／非対応ブラウザ）は非表示
+  if (!fbMessaging || !('Notification' in window) || !('serviceWorker' in navigator)) {
+    btn.style.display = 'none'; return;
+  }
+  if (!currentUser) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  var p = Notification.permission;
+  if (p === 'granted') { icon.textContent = '🔔'; text.textContent = '通知ON'; btn.title = '通知は有効です（タップで再登録）'; }
+  else if (p === 'denied') { icon.textContent = '🔕'; text.textContent = '通知拒否'; btn.title = '端末の設定から通知を許可してください'; }
+  else { icon.textContent = '🔔'; text.textContent = '通知OFF'; btn.title = 'タップで通知を有効化'; }
+}
+
+// 通知許可リクエスト＋トークン取得
+function enableNotifications() {
+  if (!fbMessaging) { toast('この端末は Web Push 非対応です','error'); return; }
+  if (isIOS() && !isStandalonePWA()) {
+    alert('iPhone で通知を受け取るには：\n\n1. 共有ボタン（□↑）を開く\n2.「ホーム画面に追加」を実行\n3. 追加されたアイコンからこのアプリを起動\n4. もう一度この「通知」ボタンを押す');
+    return;
+  }
+  if (FCM_VAPID_KEY === 'PASTE_YOUR_VAPID_KEY_HERE') {
+    alert('VAPID キーが未設定です。\nFirebase Console > プロジェクトの設定 > Cloud Messaging > Web Push 証明書 で発行した鍵を、index.html の FCM_VAPID_KEY に貼り付けてください。');
+    return;
+  }
+  Notification.requestPermission().then(function(p) {
+    updateNotifyBtn();
+    if (p !== 'granted') { toast('通知が許可されませんでした','error'); return; }
+    return fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: _swReg })
+      .then(function(token) {
+        if (!token) { toast('トークンを取得できませんでした','error'); return; }
+        return saveFcmTokenToDb(token).then(function(){
+          toast('通知を有効にしました','success');
+          console.log('[FCM] token saved:', token);
+        });
+      });
+  }).catch(function(err){
+    console.error('[FCM] enable failed', err);
+    toast('通知の有効化に失敗：' + (err && err.message ? err.message : err),'error');
+  });
+}
+
+// フォアグラウンド受信 → トースト表示（SW は走らないので自前で見せる）
+if (fbMessaging) {
+  try {
+    fbMessaging.onMessage(function(payload) {
+      var d = (payload && (payload.data || payload.notification)) || {};
+      var title = d.title || '通知';
+      var body = d.body || '';
+      if (typeof toast === 'function') toast(title + (body ? '：' + body : ''), 'info');
+    });
+  } catch(e) { console.warn('onMessage setup failed', e); }
+}
+
+// ログイン済みでまだ許可済みなら、起動時にトークンを更新保存（再ログイン時の取りこぼし防止）
+function refreshFcmTokenIfGranted() {
+  if (!fbMessaging || !currentUser) return;
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  if (FCM_VAPID_KEY === 'PASTE_YOUR_VAPID_KEY_HERE') return;
+  fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: _swReg })
+    .then(function(token){ if (token) saveFcmTokenToDb(token); })
+    .catch(function(err){ console.warn('[FCM] silent refresh failed', err); });
+}
 
 // 管理者メール（このメールはルールで常に許可される）
 var ADMIN_EMAIL = 'mbk.matsui@gmail.com';
@@ -6493,6 +6606,12 @@ document.addEventListener('DOMContentLoaded', function(){
     deniedLogoutBtn.addEventListener('click', function(){ fbAuth.signOut(); });
   }
 
+  // 通知トグルボタン
+  var notifyBtn = qs('#notify-toggle-btn');
+  if (notifyBtn) {
+    notifyBtn.addEventListener('click', function(){ enableNotifications(); });
+  }
+
   function showAccessDenied(email) {
     qs('#denied-email').textContent = email || '';
     qs('#access-denied-overlay').classList.remove('hidden');
@@ -6526,6 +6645,9 @@ document.addEventListener('DOMContentLoaded', function(){
       } else {
         document.body.classList.remove('is-admin');
       }
+
+      // 通知ボタンの表示更新＋既許可ならトークン再保存
+      try { updateNotifyBtn(); refreshFcmTokenIfGranted(); } catch(e) {}
 
       // データ同期を開始（1回だけ）
       if (!_dataSubscribed) {
@@ -6590,6 +6712,7 @@ document.addEventListener('DOMContentLoaded', function(){
       document.body.classList.add('not-logged-in');
       loginOverlay.classList.remove('hidden');
       userInfoEl.style.display = 'none';
+      try { updateNotifyBtn(); } catch(e) {}
     }
   });
 });
