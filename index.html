@@ -2595,20 +2595,22 @@ function openMissingWorkersModal() {
     var pendingCount = 0;
     function update() {
       valEl.textContent = pendingCount + '人';
-      stepper.classList.toggle('unfilled', pendingCount===0);
-      stepper.classList.toggle('pending', pendingCount>0);
+      var touched = stepper.dataset.touched === '1';
+      // 触られたら（0人のままでも）pending スタイルで「保存対象」を示す
+      stepper.classList.toggle('unfilled', pendingCount===0 && !touched);
+      stepper.classList.toggle('pending', pendingCount>0 || touched);
     }
     stepper.querySelector('.stepper-minus').addEventListener('click', function(){
       stepper.dataset.touched = '1';
       if (pendingCount > 0) { pendingCount--; }
-      update();
       stepper.dataset.pending = pendingCount;
+      update();
     });
     stepper.querySelector('.stepper-plus').addEventListener('click', function(){
       stepper.dataset.touched = '1';
       if (pendingCount < 99) { pendingCount++; }
-      update();
       stepper.dataset.pending = pendingCount;
+      update();
     });
   });
 }
@@ -2753,6 +2755,7 @@ function renderTodaySchedule() {
     // クロージャ変数で管理（datasetの文字列変換に依存しない）
     var savedCount=Number(stepper.dataset.count); if(isNaN(savedCount)) savedCount=0;
     var pendingCount=savedCount;
+    var touched=false; // ＋／－を1回でも触ったか（0人を意図的に保存するときの判定用）
 
     function applyStyle(){
       var dirty=(pendingCount!==savedCount);
@@ -2760,18 +2763,22 @@ function renderTodaySchedule() {
       stepper.classList.remove('unfilled','filled','pending');
       if(dirty)        stepper.classList.add('pending');
       else if(isSaved) stepper.classList.add('filled');
+      else if(touched) stepper.classList.add('pending'); // 触ったが値は0のまま → 保存意思あり
       else             stepper.classList.add('unfilled');
-      if(dirty) saveBtn.classList.remove('hidden');
-      else      saveBtn.classList.add('hidden');
+      // 値変更あり or 未保存状態で触った時に保存ボタンを表示
+      if(dirty || (touched && !isSaved)) saveBtn.classList.remove('hidden');
+      else                                saveBtn.classList.add('hidden');
     }
     stepper.querySelector('.stepper-minus').addEventListener('click',function(e){
       e.stopPropagation();
+      touched=true;
       if(pendingCount>0) pendingCount--;
       valEl.textContent=pendingCount>0?pendingCount+'人':'0人';
       applyStyle();
     });
     stepper.querySelector('.stepper-plus').addEventListener('click',function(e){
       e.stopPropagation();
+      touched=true;
       if(pendingCount<99) pendingCount++;
       valEl.textContent=pendingCount+'人';
       applyStyle();
@@ -2779,6 +2786,7 @@ function renderTodaySchedule() {
     saveBtn.addEventListener('click',function(e){
       e.stopPropagation();
       savedCount=pendingCount;
+      touched=false; // 保存したのでリセット
       stepper.dataset.count=savedCount; // updateWorkerPrompt用に同期
       stepper.dataset.saved='1';        // 0人でも明示保存したらフラグON
       var tid=stepper.dataset.tid;
