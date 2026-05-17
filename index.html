@@ -2460,8 +2460,8 @@ function escapeHtml(s) {
 
 // ===== Dashboard =====
 // ===== 作業員人数の未入力検出 =====
-// 過去 daysBack 日 + 今日 の範囲で、進行中タスクのうち作業員人数が
-// 未入力（記録なし or 0人）の項目を抽出
+// 過去 daysBack 日 + 今日 の範囲で、進行中タスクのうち作業員人数の
+// 記録が無いものを抽出。0人で明示的に保存されたタスクは「記録あり」として扱う。
 function getMissingWorkerEntries(daysBack) {
   daysBack = (daysBack==null) ? 7 : daysBack;
   var today = todayStr();
@@ -2476,7 +2476,7 @@ function getMissingWorkerEntries(daysBack) {
     dates.forEach(function(d){
       if (d < t.startDate || d > t.endDate) return;
       var rec = (data.education||[]).find(function(e){ return e.taskId===t.id && e.date===d; });
-      if (!rec || !rec.count) {
+      if (!rec) {
         missing.push({ taskId: t.id, taskName: t.name, supervisor: t.supervisor||'', projectId: t.projectId, date: d, isToday: d===today });
       }
     });
@@ -2599,10 +2599,16 @@ function openMissingWorkersModal() {
       stepper.classList.toggle('pending', pendingCount>0);
     }
     stepper.querySelector('.stepper-minus').addEventListener('click', function(){
-      if (pendingCount > 0) { pendingCount--; update(); stepper.dataset.pending = pendingCount; }
+      stepper.dataset.touched = '1';
+      if (pendingCount > 0) { pendingCount--; }
+      update();
+      stepper.dataset.pending = pendingCount;
     });
     stepper.querySelector('.stepper-plus').addEventListener('click', function(){
-      if (pendingCount < 99) { pendingCount++; update(); stepper.dataset.pending = pendingCount; }
+      stepper.dataset.touched = '1';
+      if (pendingCount < 99) { pendingCount++; }
+      update();
+      stepper.dataset.pending = pendingCount;
     });
   });
 }
@@ -2612,20 +2618,20 @@ function saveAllMissingWorkers() {
   var content = qs('#mw-content');
   var saved = 0;
   content.querySelectorAll('.worker-stepper').forEach(function(stepper){
+    // ＋／－を1回でも触ったら、たとえ 0 人でも「明示的に記録」として保存
+    if (stepper.dataset.touched !== '1') return;
     var pending = Number(stepper.dataset.pending||0);
-    if (pending > 0) {
-      var tid = stepper.dataset.tid;
-      var d = stepper.dataset.d;
-      data.education = (data.education||[]).filter(function(r){ return !(r.taskId===tid&&r.date===d); });
-      data.education.push({ taskId: tid, date: d, count: pending });
-      saved++;
-    }
+    var tid = stepper.dataset.tid;
+    var d = stepper.dataset.d;
+    data.education = (data.education||[]).filter(function(r){ return !(r.taskId===tid&&r.date===d); });
+    data.education.push({ taskId: tid, date: d, count: pending });
+    saved++;
   });
   if (saved > 0) {
     saveData(data);
     toast(saved+'件の作業員人数を保存しました');
   } else {
-    toast('入力された人数がありません','error');
+    toast('＋／－ボタンで人数を変更してから保存してください','error');
     return;
   }
   qs('#modal-missing-workers').classList.add('hidden');
@@ -2647,7 +2653,7 @@ function renderTodaySchedule() {
   if(todayTasks.length > 0) {
     todayTasks.forEach(function(t){
       var rec = data.education.find(function(e){ return e.taskId===t.id&&e.date===today; });
-      if(!rec||rec.count===0) unfilledCount++;
+      if(!rec) unfilledCount++;
     });
   }
 
@@ -2689,10 +2695,10 @@ function renderTodaySchedule() {
       var pColor=proj?proj.color:'#999';
       var sc=statusColor(t.status);
       var rec=data.education.find(function(e){ return e.taskId===t.id&&e.date===today; });
+      var isSaved = !!rec;
       var curCount=rec?rec.count:0;
-      var isFilled = curCount > 0;
-      var stepperClass='worker-stepper'+(isFilled?' filled':' unfilled');
-      var stepperVal=isFilled?curCount+'人':'0人';
+      var stepperClass='worker-stepper'+(isSaved?' filled':' unfilled');
+      var stepperVal=curCount+'人';
       html+='<div class="today-task-item" style="border-left-color:'+pColor+'" data-tid="'+t.id+'" data-pid="'+t.projectId+'">'+
         '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px">'+
           getTaskIconSVG(t.name,32)+
@@ -2706,7 +2712,7 @@ function renderTodaySchedule() {
           '<div style="display:flex;align-items:center;gap:4px">'+
             '<span style="font-size:10px;color:var(--text-muted)">👷</span>'+
             '<div class="worker-stepper-wrap" data-tid="'+t.id+'">'+
-              '<div class="'+stepperClass+'" data-tid="'+t.id+'" data-count="'+curCount+'" data-pending="'+curCount+'">'+
+              '<div class="'+stepperClass+'" data-tid="'+t.id+'" data-count="'+curCount+'" data-pending="'+curCount+'" data-saved="'+(isSaved?'1':'0')+'">'+
                 '<button class="stepper-btn stepper-minus" type="button">－</button>'+
                 '<span class="stepper-val">'+stepperVal+'</span>'+
                 '<button class="stepper-btn stepper-plus" type="button">＋</button>'+
@@ -2724,7 +2730,7 @@ function renderTodaySchedule() {
   function updateWorkerPrompt() {
     var allSteppers = wrap.querySelectorAll('.worker-stepper');
     var remaining = 0;
-    allSteppers.forEach(function(s){ var c=Number(s.dataset.count); if(isNaN(c)||c===0) remaining++; }); // data-count = 保存済みの値
+    allSteppers.forEach(function(s){ if(s.dataset.saved!=='1') remaining++; }); // 保存済みフラグで判定（0人でも保存済みなら未入力扱いにしない）
     var banner = qs('#worker-prompt-banner');
     if(!banner) return;
     if(remaining > 0) {
@@ -2750,10 +2756,11 @@ function renderTodaySchedule() {
 
     function applyStyle(){
       var dirty=(pendingCount!==savedCount);
+      var isSaved=(stepper.dataset.saved==='1');
       stepper.classList.remove('unfilled','filled','pending');
-      if(dirty)             stepper.classList.add('pending');
-      else if(savedCount>0) stepper.classList.add('filled');
-      else                  stepper.classList.add('unfilled');
+      if(dirty)        stepper.classList.add('pending');
+      else if(isSaved) stepper.classList.add('filled');
+      else             stepper.classList.add('unfilled');
       if(dirty) saveBtn.classList.remove('hidden');
       else      saveBtn.classList.add('hidden');
     }
@@ -2773,13 +2780,14 @@ function renderTodaySchedule() {
       e.stopPropagation();
       savedCount=pendingCount;
       stepper.dataset.count=savedCount; // updateWorkerPrompt用に同期
+      stepper.dataset.saved='1';        // 0人でも明示保存したらフラグON
       var tid=stepper.dataset.tid;
       data.education=data.education.filter(function(r){ return !(r.taskId===tid&&r.date===today); });
-      if(savedCount>0) data.education.push({taskId:tid,date:today,count:savedCount});
+      data.education.push({taskId:tid,date:today,count:savedCount});
       saveData(data);
       updateWorkerPrompt();
       stepper.classList.remove('unfilled','filled','pending');
-      stepper.classList.add(savedCount>0?'filled':'unfilled');
+      stepper.classList.add('filled');
       saveBtn.classList.remove('hidden');
       saveBtn.textContent='✓ 保存済';
       saveBtn.style.background='#16a34a';
