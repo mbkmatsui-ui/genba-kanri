@@ -2766,9 +2766,17 @@ function renderTodaySchedule() {
     }
     stepper.querySelector('.stepper-minus').addEventListener('click',function(e){
       e.stopPropagation();
+      var wasAt0 = (pendingCount === 0);
       if(pendingCount>0) pendingCount--;
       valEl.textContent=pendingCount>0?pendingCount+'人':'0人';
-      applyStyle();
+      // 0 のままで未保存の場合 → 「0人で保存」する意思表示として保存ボタンを出す
+      if (wasAt0 && stepper.dataset.saved !== '1') {
+        stepper.classList.remove('unfilled','filled','pending');
+        stepper.classList.add('pending');
+        saveBtn.classList.remove('hidden');
+      } else {
+        applyStyle();
+      }
     });
     stepper.querySelector('.stepper-plus').addEventListener('click',function(e){
       e.stopPropagation();
