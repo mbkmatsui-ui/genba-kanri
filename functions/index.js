@@ -8,6 +8,7 @@
  */
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onValueCreated } = require('firebase-functions/v2/database');
+const { onRequest } = require('firebase-functions/v2/https');
 const { setGlobalOptions } = require('firebase-functions/v2');
 const admin = require('firebase-admin');
 
@@ -262,3 +263,72 @@ exports.notifyAuditUpdate = onValueCreated(
     console.log('notifyAuditUpdate', { cat: entry.category, act: entry.action, ...res });
   }
 );
+
+// ---------- デバッグ：FCM 配信の動作確認 ----------
+// URL を開くだけで、全 FCM トークンへテスト通知を送ります。
+// 例: https://<region>-genba-kanri-963a8.cloudfunctions.net/testNotify?key=genba2026
+const TEST_KEY = 'genba2026';
+
+exports.testNotify = onRequest(async (req, res) => {
+  if (req.query.key !== TEST_KEY) {
+    res.status(403).send('forbidden');
+    return;
+  }
+  try {
+    const allTokens = await getAllTokens();
+    const tokens = allTokens.map(t => t.token);
+    const tokenSummary = allTokens.map(t => ({ uid: t.uid.slice(0, 8), email: t.email }));
+    if (!tokens.length) {
+      res.send(JSON.stringify({
+        ok: false,
+        reason: 'No FCM tokens registered.',
+        hint: 'Open the app via the home screen icon and tap 🔔.'
+      }, null, 2));
+      return;
+    }
+    const r = await sendToTokens(
+      tokens,
+      'テスト通知（Functions）',
+      'Cloud Functions から送信しています。' + new Date().toLocaleString('ja-JP', { timeZone: TZ }),
+      { kind: 'test' }
+    );
+    res.send(JSON.stringify({ ok: true, tokenSummary, result: r }, null, 2));
+  } catch (e) {
+    res.status(500).send(JSON.stringify({ ok: false, error: String(e && e.message || e) }));
+  }
+});
+
+// ---------- デバッグ：データ構造の確認 ----------
+// 現在の RTDB の `data` ノード概要を返します。
+exports.debugData = onRequest(async (req, res) => {
+  if (req.query.key !== TEST_KEY) {
+    res.status(403).send('forbidden');
+    return;
+  }
+  try {
+    const today = todayStrJST();
+    const tomorrow = addDaysStr(today, 1);
+    const data = await getData();
+    const projects = asArray(data.projects);
+    const tasks = asArray(data.tasks);
+    const education = asArray(data.education);
+    const tomorrowStart = projects.filter(p => p && p.startDate === tomorrow);
+    const overdue = tasks.filter(t => t && t.endDate && t.endDate < today && !t.workCompleted && t.status !== 'done');
+    const activeToday = tasks.filter(t => t && t.startDate && t.endDate && t.startDate <= today && today <= t.endDate && !t.workCompleted && t.status !== 'done');
+    const missing = activeToday.filter(t => !education.some(e => e && e.taskId === t.id && e.date === today));
+    res.send(JSON.stringify({
+      today, tomorrow,
+      counts: {
+        projects: projects.length,
+        tasks: tasks.length,
+        education: education.length
+      },
+      tomorrowStart: tomorrowStart.map(p => ({ name: p.name, startDate: p.startDate })),
+      overdueTasks: overdue.map(t => ({ name: t.name, endDate: t.endDate, assignee: t.assignee })),
+      activeTodayCount: activeToday.length,
+      missingWorkerCount: missing.map(t => ({ name: t.name, id: t.id }))
+    }, null, 2));
+  } catch (e) {
+    res.status(500).send(JSON.stringify({ ok: false, error: String(e && e.message || e) }));
+  }
+});
