@@ -2000,34 +2000,58 @@ function saveData(d) {
     } catch(e) { console.warn('audit log compute failed:', e); }
   }
   _suppressAuditNext = false;
-  _prevDataSnapshot = JSON.parse(JSON.stringify(d));
 
   // 容量チェック
   try { checkCapacityAndWarn(d); } catch(e) {}
 
-  // Firebase に書き込み（ログイン中のみ）
+  // Firebase に書き込み（ログイン中のみ、transaction で他端末の変更を吸収）
   if (currentUser) {
     setSyncStatus('pending');
     _pendingWrites = (_pendingWrites||0) + 1;
-    fbDb.ref('data').set(d).then(function(){
+    // この保存時点での「前回同期スナップショット」をキャプチャ（後続の保存と独立）
+    var localPrev = _prevDataSnapshot ? JSON.parse(JSON.stringify(_prevDataSnapshot)) : null;
+    // 監査ログ用のベースラインは即時に更新（次回保存時に正しく差分が取れるよう）
+    _prevDataSnapshot = JSON.parse(JSON.stringify(d));
+
+    fbDb.ref('data').transaction(function(currentCloud) {
+      // クラウドが空：初回保存はローカルをそのまま書く
+      if (currentCloud == null) return d;
+      // クラウドが何もない（オブジェクト化前）でも安全に扱う
+      try { ensureDataDefaults(currentCloud); } catch(e) {}
+      if (!localPrev) {
+        // ベースラインが無いケース（初期化未完了）：自分の値で上書き（旧挙動）
+        return d;
+      }
+      var delta = computeDataDelta(localPrev, d);
+      return applyDelta(currentCloud, delta);
+    }, function(err, committed, snap) {
       _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
       _lastSyncedAt = Date.now();
-      if (_pendingWrites === 0) setSyncStatus('synced');
-    }).catch(function(err){
-      _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
-      setSyncStatus('error');
-      console.error('cloud save failed:', err);
-      if (typeof toast === 'function') {
-        var msg = (err && err.message) ? err.message : '';
-        if (msg.toLowerCase().indexOf('size') >= 0 || msg.indexOf('large') >= 0) {
-          toast('データが大きすぎてクラウド保存できません。古い写真を削除してください', 'error');
-        } else if (err && err.code === 'PERMISSION_DENIED') {
-          toast('保存権限がありません', 'error');
-        } else {
-          toast('クラウド保存に失敗：'+(msg||'通信エラー'), 'error');
+      if (err) {
+        setSyncStatus('error');
+        console.error('cloud save failed:', err);
+        if (typeof toast === 'function') {
+          var msg = (err && err.message) ? err.message : '';
+          if (msg.toLowerCase().indexOf('size') >= 0 || msg.indexOf('large') >= 0) {
+            toast('データが大きすぎてクラウド保存できません。古い写真を削除してください', 'error');
+          } else if (err && err.code === 'PERMISSION_DENIED') {
+            toast('保存権限がありません', 'error');
+          } else {
+            toast('クラウド保存に失敗：'+(msg||'通信エラー'), 'error');
+          }
         }
       }
-    });
+      // 書き込み完了：バッファされた cloud snapshot があれば適用
+      if (_pendingWrites === 0) {
+        if (_pendingCloudSnap !== null) {
+          var buf = _pendingCloudSnap;
+          _pendingCloudSnap = null;
+          try { applyCloudData(buf); } catch(e) { console.warn('apply buffered cloud failed:', e); }
+        } else {
+          setSyncStatus('synced');
+        }
+      }
+    }, true);
   }
 }
 
@@ -2035,6 +2059,9 @@ function saveData(d) {
 var _pendingWrites = 0;
 var _lastSyncedAt = 0;
 var _isOffline = false;
+// 自分の書き込み進行中（_pendingWrites>0）に届いた cloud snapshot をバッファして、
+// 全書き込み完了後に適用する。これによりローカル編集の上書きを防ぐ。
+var _pendingCloudSnap = null;
 
 function setSyncStatus(state) {
   var btn = qs('#sync-status-btn');
@@ -2076,22 +2103,30 @@ function formatSyncTime(ts) {
   return hh+':'+mm;
 }
 
+// クラウドの値をローカル data へ反映するヘルパー（複数箇所で再利用）
+function applyCloudData(cloud) {
+  if (!cloud) return;
+  try { ensureDataDefaults(cloud); } catch(e) {}
+  _suppressAuditNext = true;
+  data = cloud;
+  _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
+  try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
+  try { renderSidebarProjects && renderSidebarProjects(); } catch(e) {}
+  try { if (state && state.view) navigate(state.view); } catch(e) {}
+  try { updateCompanyNameHeader && updateCompanyNameHeader(); } catch(e) {}
+  _firstDataSync = false;
+  _lastSyncedAt = Date.now();
+  if (_pendingWrites === 0) setSyncStatus('synced');
+  try { checkCapacityAndWarn(data); } catch(e) {}
+}
+
 // 手動で最新を取得（強制リロード）
 function forceSyncFromCloud() {
   if (!currentUser) { toast('ログインしていません','error'); return; }
   setSyncStatus('pending');
   fbDb.ref('data').once('value').then(function(snap){
     var cloud = snap.val();
-    if (cloud) {
-      ensureDataDefaults(cloud);
-      _suppressAuditNext = true;
-      data = cloud;
-      _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
-      try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
-      renderSidebarProjects && renderSidebarProjects();
-      if (state && state.view) navigate(state.view);
-      updateCompanyNameHeader && updateCompanyNameHeader();
-    }
+    if (cloud) applyCloudData(cloud);
     _lastSyncedAt = Date.now();
     setSyncStatus('synced');
     toast('最新データに更新しました','success');
@@ -2199,6 +2234,103 @@ function computeAuditChanges(oldD, newD) {
   if (newArch > oldArch) changes.push(makeAuditEntry('add', 'project', '完了履歴', (newArch - oldArch) + '件をアーカイブ'));
 
   return changes;
+}
+
+// ===== マルチユーザー編集用：差分計算とマージ =====
+// _prevDataSnapshot から cur への差分（自分が加えた変更）を計算する。
+// 配列は id で同定、education は (taskId, date) 複合キーで同定。
+function computeDataDelta(prev, cur) {
+  prev = prev || {};
+  cur  = cur  || {};
+  function arrDelta(prevArr, curArr) {
+    prevArr = prevArr || [];
+    curArr  = curArr  || [];
+    var prevMap = {};
+    prevArr.forEach(function(x){ if(x && x.id!=null) prevMap[x.id]=x; });
+    var added = [], updated = {}, deletedIds = [];
+    var seen = {};
+    curArr.forEach(function(x){
+      if(!x || x.id==null) return;
+      seen[x.id] = true;
+      if(!prevMap[x.id]) added.push(x);
+      else if(JSON.stringify(prevMap[x.id]) !== JSON.stringify(x)) updated[x.id] = x;
+    });
+    Object.keys(prevMap).forEach(function(id){ if(!seen[id]) deletedIds.push(id); });
+    return { added: added, updated: updated, deletedIds: deletedIds };
+  }
+  function eduKey(r){ return r.taskId + '' + r.date; }
+  function eduDelta(prevArr, curArr) {
+    prevArr = prevArr || []; curArr = curArr || [];
+    var prevMap = {};
+    prevArr.forEach(function(r){ if(r && r.taskId && r.date) prevMap[eduKey(r)] = r; });
+    var upserts = [], deletedKeys = [];
+    var seen = {};
+    curArr.forEach(function(r){
+      if(!r || !r.taskId || !r.date) return;
+      var k = eduKey(r); seen[k] = true;
+      var p = prevMap[k];
+      if(!p || p.count !== r.count) upserts.push(r);
+    });
+    Object.keys(prevMap).forEach(function(k){ if(!seen[k]) deletedKeys.push(k); });
+    return { upserts: upserts, deletedKeys: deletedKeys };
+  }
+  var settingsChanged = JSON.stringify(prev.settings||{}) !== JSON.stringify(cur.settings||{});
+  return {
+    projects:         arrDelta(prev.projects,         cur.projects),
+    tasks:            arrDelta(prev.tasks,            cur.tasks),
+    clients:          arrDelta(prev.clients,          cur.clients),
+    photos:           arrDelta(prev.photos,           cur.photos),
+    drawings:         arrDelta(prev.drawings,         cur.drawings),
+    archivedProjects: arrDelta(prev.archivedProjects, cur.archivedProjects),
+    education:        eduDelta(prev.education,        cur.education),
+    settings:         settingsChanged ? (cur.settings || {}) : null
+  };
+}
+
+// クラウド最新値 cloud に自分の差分 delta を適用してマージした結果を返す。
+// per-item の Last-Write-Wins：自分の更新は cloud 側の同 ID 更新より優先。
+function applyDelta(cloud, delta) {
+  cloud = JSON.parse(JSON.stringify(cloud || {}));
+  ensureDataDefaults(cloud);
+  function applyArr(cloudArr, d) {
+    cloudArr = cloudArr || [];
+    var resultMap = {};
+    var order = [];
+    cloudArr.forEach(function(x){
+      if(!x || x.id==null) return;
+      if(d.deletedIds.indexOf(x.id) >= 0) return; // 自分が削除した
+      if(d.updated[x.id]) resultMap[x.id] = d.updated[x.id]; // 自分の更新が優先
+      else                resultMap[x.id] = x;
+      order.push(x.id);
+    });
+    // 自分の更新で cloud に存在しないもの（他者が削除した可能性）→ 復活させる扱いで追加
+    Object.keys(d.updated).forEach(function(id){
+      if(!resultMap[id]) { resultMap[id] = d.updated[id]; order.push(id); }
+    });
+    // 追加
+    (d.added||[]).forEach(function(x){
+      if(!resultMap[x.id]) { resultMap[x.id] = x; order.push(x.id); }
+    });
+    return order.map(function(id){ return resultMap[id]; });
+  }
+  cloud.projects         = applyArr(cloud.projects,         delta.projects);
+  cloud.tasks            = applyArr(cloud.tasks,            delta.tasks);
+  cloud.clients          = applyArr(cloud.clients,          delta.clients);
+  cloud.photos           = applyArr(cloud.photos,           delta.photos);
+  cloud.drawings         = applyArr(cloud.drawings,         delta.drawings);
+  cloud.archivedProjects = applyArr(cloud.archivedProjects, delta.archivedProjects);
+  // education（複合キー）
+  (function(){
+    var arr = cloud.education || [];
+    function eduKey(r){ return r.taskId + '' + r.date; }
+    var byKey = {};
+    arr.forEach(function(r){ if(r && r.taskId && r.date) byKey[eduKey(r)] = r; });
+    delta.education.deletedKeys.forEach(function(k){ delete byKey[k]; });
+    delta.education.upserts.forEach(function(r){ byKey[eduKey(r)] = r; });
+    cloud.education = Object.keys(byKey).map(function(k){ return byKey[k]; });
+  })();
+  if (delta.settings) cloud.settings = delta.settings;
+  return cloud;
 }
 
 function describeProjectDiff(o, n) {
@@ -6672,16 +6804,12 @@ document.addEventListener('DOMContentLoaded', function(){
         fbDb.ref('data').on('value', function(snap){
           var cloud = snap.val();
           if (cloud) {
-            // クラウドにデータがある場合：採用
-            ensureDataDefaults(cloud);
-            _suppressAuditNext = true;  // この更新は監査しない
-            data = cloud;
-            _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
-            try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
-            renderSidebarProjects && renderSidebarProjects();
-            if (state && state.view) navigate(state.view);
-            updateCompanyNameHeader && updateCompanyNameHeader();
-            _firstDataSync = false;
+            // 自分の書き込み進行中はバッファして、完了後に適用（ローカル編集の上書き防止）
+            if (_pendingWrites > 0) {
+              _pendingCloudSnap = cloud;
+              return;
+            }
+            applyCloudData(cloud);
           } else {
             // クラウドが空：オプションAに従い空データから新規スタート
             if (_firstDataSync) {
