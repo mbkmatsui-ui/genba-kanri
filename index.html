@@ -830,33 +830,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .loc-map-link:hover { color: #2563eb; text-decoration: underline; }
 .loc-map-link:hover span { color: #2563eb !important; }
 
-/* ===== 作業員人数の未入力アラート ===== */
-.missing-workers-alert { background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%); border:1.5px solid #d97706; border-radius:10px; padding:12px 14px; margin-bottom:14px; box-shadow:0 2px 6px rgba(217,119,6,.15); }
-.missing-workers-alert.urgent { background:linear-gradient(135deg,#fee2e2 0%,#fca5a5 100%); border-color:#dc2626; animation: missingPulse 2s ease-in-out infinite; }
-@keyframes missingPulse { 0%,100% { box-shadow: 0 2px 6px rgba(220,38,38,.15); } 50% { box-shadow: 0 2px 18px rgba(220,38,38,.4); } }
-.missing-workers-header { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:700; color:#92400e; margin-bottom:8px; }
-.missing-workers-alert.urgent .missing-workers-header { color:#991b1b; }
-.missing-workers-summary { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
-.sup-chip { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; background:#fff; border:1px solid #d97706; border-radius:99px; font-size:11px; font-weight:700; color:#92400e; }
-.sup-chip.is-self { background:#dc2626; color:#fff; border-color:#991b1b; box-shadow:0 0 0 2px #fee2e2; }
-.sup-chip-count { background:#d97706; color:#fff; padding:1px 6px; border-radius:99px; font-size:10px; }
-.sup-chip.is-self .sup-chip-count { background:#fff; color:#dc2626; }
-.missing-workers-action-btn { padding:7px 14px; background:#d97706; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; }
-.missing-workers-action-btn:hover { background:#b45309; }
-.missing-workers-alert.urgent .missing-workers-action-btn { background:#dc2626; }
-.missing-workers-alert.urgent .missing-workers-action-btn:hover { background:#991b1b; }
-
-/* 未入力モーダル */
-#modal-missing-workers .modal { max-width: 640px; }
-.mw-day-section { border:1px solid var(--border); border-radius:8px; margin-bottom:12px; overflow:hidden; }
-.mw-day-header { padding:8px 12px; background:#fef3c7; font-size:12px; font-weight:700; color:#92400e; display:flex; align-items:center; justify-content:space-between; }
-.mw-day-header.urgent { background:#fee2e2; color:#991b1b; }
-.mw-task-row { display:flex; align-items:center; gap:10px; padding:10px 12px; border-top:1px solid var(--border-lt); }
-.mw-task-info { flex:1; min-width:0; }
-.mw-task-name { font-size:13px; font-weight:700; color:var(--text); }
-.mw-task-meta { font-size:11px; color:var(--text-muted); margin-top:2px; }
-.mw-task-meta .sup-name { color:var(--primary); font-weight:700; }
-.mw-task-meta .sup-name.is-self { color:#dc2626; }
+/* 旧「作業員人数の未入力アラート/モーダル」関連 CSS は作業報告書に統合のため削除 */
 
 /* ===== 完了済 案件の閲覧専用モード ===== */
 body.viewing-archived #btn-add-task,
@@ -1048,7 +1022,6 @@ body.is-admin .admin-only { display:flex; }
         </div>
       </div>
       <div class="dashboard-scroll">
-        <div id="missing-workers-wrap"></div>
         <div id="today-schedule-wrap"></div>
         <div id="material-alert-wrap"></div>
         <div class="stats-grid">
@@ -1619,23 +1592,6 @@ body.is-admin .admin-only { display:flex; }
     <div class="modal-footer">
       <button class="btn btn-ghost" id="btn-email-import-cancel">キャンセル</button>
       <button class="btn btn-primary" id="btn-email-import-apply">取り込む</button>
-    </div>
-  </div>
-</div>
-
-<!-- 未入力作業員人数モーダル -->
-<div class="modal-overlay hidden" id="modal-missing-workers">
-  <div class="modal">
-    <div class="modal-header">
-      <h3>作業員人数の未入力</h3>
-      <button class="modal-close">×</button>
-    </div>
-    <div class="modal-body" style="max-height:70vh;overflow:auto">
-      <div id="mw-content"></div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" id="btn-mw-close">閉じる</button>
-      <button class="btn btn-primary" id="btn-mw-save-all">入力をすべて保存</button>
     </div>
   </div>
 </div>
@@ -2679,187 +2635,17 @@ function escapeHtml(s) {
 }
 
 // ===== Dashboard =====
-// ===== 作業員人数の未入力検出 =====
-// 過去 daysBack 日 + 今日 の範囲で、進行中タスクのうち作業員人数の
-// 記録が無いものを抽出。0人で明示的に保存されたタスクは「記録あり」として扱う。
-function getMissingWorkerEntries(daysBack) {
-  daysBack = (daysBack==null) ? 7 : daysBack;
-  var today = todayStr();
-  var dates = [];
-  for (var i = daysBack; i >= 0; i--) {
-    dates.push(addDays(today, -i));
-  }
-  var missing = [];
-  (data.tasks||[]).forEach(function(t){
-    if (t.workCompleted || t.status === 'done') return;
-    if (!t.startDate || !t.endDate) return;
-    dates.forEach(function(d){
-      if (d < t.startDate || d > t.endDate) return;
-      var rec = (data.education||[]).find(function(e){ return e.taskId===t.id && e.date===d; });
-      if (!rec) {
-        missing.push({ taskId: t.id, taskName: t.name, supervisor: t.supervisor||'', projectId: t.projectId, date: d, isToday: d===today });
-      }
-    });
-  });
-  return missing;
-}
 
-// 現在ログインしているユーザーが現場主任に該当するか判定
+// 現在ログインしているユーザーが現場主任に該当するか判定（他箇所でも使用）
 function isCurrentUserSupervisor(supName) {
   if (!supName || !currentUser) return false;
   var dn = (currentUser.displayName||'').trim();
   var em = (currentUser.email||'').trim().toLowerCase();
   if (!dn && !em) return false;
-  // 表示名・メールアドレスのローカル部に supName が含まれているかで判定（緩い一致）
   return (dn && dn.indexOf(supName) >= 0) || (em && em.indexOf(supName.toLowerCase()) >= 0);
 }
 
-function renderMissingWorkersAlert() {
-  var wrap = qs('#missing-workers-wrap');
-  if (!wrap) return;
-  var missing = getMissingWorkerEntries(7);
-  if (!missing.length) { wrap.innerHTML=''; return; }
-
-  // 担当者ごとに集計
-  var bySupervisor = {};
-  missing.forEach(function(m){
-    var key = m.supervisor || '（未設定）';
-    if (!bySupervisor[key]) bySupervisor[key] = 0;
-    bySupervisor[key]++;
-  });
-  // 過去日（今日以外）が含まれるかで緊急度
-  var hasPastMissing = missing.some(function(m){ return !m.isToday; });
-  var supervisors = Object.keys(bySupervisor);
-  // 自分が現場主任に含まれるか（urgentにする）
-  var isSelfMissing = supervisors.some(isCurrentUserSupervisor);
-  var urgent = hasPastMissing || isSelfMissing;
-
-  var supChips = supervisors.map(function(name){
-    var isSelf = isCurrentUserSupervisor(name);
-    return '<span class="sup-chip'+(isSelf?' is-self':'')+'">'+
-      escHtml(name)+'<span class="sup-chip-count">'+bySupervisor[name]+'件</span>'+
-      (isSelf ? ' ← あなた' : '')+
-    '</span>';
-  }).join('');
-
-  wrap.innerHTML = '<div class="missing-workers-alert'+(urgent?' urgent':'')+'">'+
-    '<div class="missing-workers-header">'+
-      (urgent?'🚨':'⚠️')+
-      '<span>作業員人数 '+missing.length+'件 未入力'+(hasPastMissing?'（過去日を含む）':'')+'</span>'+
-    '</div>'+
-    '<div class="missing-workers-summary">'+supChips+'</div>'+
-    '<button class="missing-workers-action-btn" id="btn-open-missing">入力する</button>'+
-  '</div>';
-
-  qs('#btn-open-missing').addEventListener('click', openMissingWorkersModal);
-}
-
-// 未入力モーダルを開く
-function openMissingWorkersModal() {
-  var modal = qs('#modal-missing-workers');
-  var content = qs('#mw-content');
-  var missing = getMissingWorkerEntries(7);
-  if (!missing.length) {
-    content.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted)">未入力はありません</div>';
-    modal.classList.remove('hidden');
-    return;
-  }
-  // 日付ごとにグループ化（新→旧）
-  var byDate = {};
-  missing.forEach(function(m){
-    if (!byDate[m.date]) byDate[m.date] = [];
-    byDate[m.date].push(m);
-  });
-  var sortedDates = Object.keys(byDate).sort(function(a,b){ return a<b?1:a>b?-1:0; });
-  var today = todayStr();
-  var html = sortedDates.map(function(d){
-    var rows = byDate[d];
-    var dObj = new Date(d+'T00:00:00');
-    var dow = ['日','月','火','水','木','金','土'][dObj.getDay()];
-    var isToday = d===today;
-    var diffDays_ = Math.round((new Date(today)-dObj)/86400000);
-    var label = isToday ? '今日（'+(dObj.getMonth()+1)+'/'+dObj.getDate()+' '+dow+'）'
-              : diffDays_+'日前（'+(dObj.getMonth()+1)+'/'+dObj.getDate()+' '+dow+'）';
-    var taskRows = rows.map(function(m){
-      var proj = data.projects.find(function(p){return p.id===m.projectId;}) || {};
-      var isSelf = isCurrentUserSupervisor(m.supervisor);
-      return '<div class="mw-task-row">'+
-        '<div class="mw-task-info">'+
-          '<div class="mw-task-name">'+escHtml(m.taskName)+'</div>'+
-          '<div class="mw-task-meta">'+escHtml(proj.name||'')+
-            (m.supervisor ? ' ／ <span class="sup-name'+(isSelf?' is-self':'')+'">現場主任：'+escHtml(m.supervisor)+(isSelf?' (あなた)':'')+'</span>' : '')+
-          '</div>'+
-        '</div>'+
-        '<div class="worker-stepper-wrap" data-tid="'+escHtml(m.taskId)+'" data-d="'+escHtml(m.date)+'">'+
-          '<div class="worker-stepper unfilled" data-tid="'+escHtml(m.taskId)+'" data-d="'+escHtml(m.date)+'" data-pending="0">'+
-            '<button class="stepper-btn stepper-minus" type="button">－</button>'+
-            '<span class="stepper-val">0人</span>'+
-            '<button class="stepper-btn stepper-plus" type="button">＋</button>'+
-          '</div>'+
-        '</div>'+
-      '</div>';
-    }).join('');
-    return '<div class="mw-day-section">'+
-      '<div class="mw-day-header'+(isToday?'':' urgent')+'"><span>'+label+'</span><span>'+rows.length+'件</span></div>'+
-      taskRows+
-    '</div>';
-  }).join('');
-
-  content.innerHTML = html;
-  modal.classList.remove('hidden');
-
-  // ステッパーのイベント
-  content.querySelectorAll('.worker-stepper-wrap').forEach(function(swrap){
-    var stepper = swrap.querySelector('.worker-stepper');
-    var valEl = stepper.querySelector('.stepper-val');
-    var pendingCount = 0;
-    function update() {
-      valEl.textContent = pendingCount + '人';
-      var touched = stepper.dataset.touched === '1';
-      // 触られたら（0人のままでも）pending スタイルで「保存対象」を示す
-      stepper.classList.toggle('unfilled', pendingCount===0 && !touched);
-      stepper.classList.toggle('pending', pendingCount>0 || touched);
-    }
-    stepper.querySelector('.stepper-minus').addEventListener('click', function(){
-      stepper.dataset.touched = '1';
-      if (pendingCount > 0) { pendingCount--; }
-      stepper.dataset.pending = pendingCount;
-      update();
-    });
-    stepper.querySelector('.stepper-plus').addEventListener('click', function(){
-      stepper.dataset.touched = '1';
-      if (pendingCount < 99) { pendingCount++; }
-      stepper.dataset.pending = pendingCount;
-      update();
-    });
-  });
-}
-
-// 一括保存
-function saveAllMissingWorkers() {
-  var content = qs('#mw-content');
-  var saved = 0;
-  content.querySelectorAll('.worker-stepper').forEach(function(stepper){
-    // ＋／－を1回でも触ったら、たとえ 0 人でも「明示的に記録」として保存
-    if (stepper.dataset.touched !== '1') return;
-    var pending = Number(stepper.dataset.pending||0);
-    var tid = stepper.dataset.tid;
-    var d = stepper.dataset.d;
-    data.education = (data.education||[]).filter(function(r){ return !(r.taskId===tid&&r.date===d); });
-    data.education.push({ taskId: tid, date: d, count: pending });
-    saved++;
-  });
-  if (saved > 0) {
-    saveData(data);
-    toast(saved+'件の作業員人数を保存しました');
-  } else {
-    toast('＋／－ボタンで人数を変更してから保存してください','error');
-    return;
-  }
-  qs('#modal-missing-workers').classList.add('hidden');
-  renderMissingWorkersAlert();
-  renderTodaySchedule();
-}
+// 旧「作業員人数 未入力アラート/モーダル/一括保存」は作業報告書に統合のため削除
 
 function renderTodaySchedule() {
   var today=todayStr();
@@ -2972,7 +2758,6 @@ function renderTodaySchedule() {
 
 function renderDashboard() {
   var today=todayStr();
-  renderMissingWorkersAlert();
   renderTodaySchedule();
   renderMaterialAlert();
   qs('#stat-active-projects').textContent=data.projects.filter(function(p){return p.status==='active';}).length;
@@ -6702,11 +6487,6 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   var drSaveBtn = qs('#btn-save-daily-report');
   if (drSaveBtn) drSaveBtn.addEventListener('click', saveDailyReport);
-  // 未入力作業員人数モーダルのボタン
-  var mwSaveBtn = qs('#btn-mw-save-all');
-  if (mwSaveBtn) mwSaveBtn.addEventListener('click', saveAllMissingWorkers);
-  var mwCloseBtn = qs('#btn-mw-close');
-  if (mwCloseBtn) mwCloseBtn.addEventListener('click', function(){ qs('#modal-missing-workers').classList.add('hidden'); });
 
   // マイカレンダー
   var mcToday = qs('#mycal-today');

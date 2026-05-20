@@ -322,38 +322,10 @@ exports.notifyOverdueTasks = onSchedule(
   }
 );
 
-// ---------- #1 17:00 作業員人数未入力リマインド ----------
-exports.notifyMissingWorkerCount = onSchedule(
-  { schedule: '0 17 * * *', timeZone: TZ },
-  async () => {
-    const today = todayStrJST();
-    const data = await getData();
-    const tasks = asArray(data.tasks);
-    const education = asArray(data.education);
-    const activeToday = tasks.filter(t =>
-      t && t.startDate && t.endDate &&
-      t.startDate <= today && today <= t.endDate &&
-      !t.workCompleted && t.status !== 'done'
-    );
-    const missing = activeToday.filter(t =>
-      !education.some(e => e && e.taskId === t.id && e.date === today)
-    );
-    if (!missing.length) {
-      console.log('notifyMissingWorkerCount: all entered');
-      return;
-    }
-    const sample = missing.slice(0, 3).map(t => t.name || '無題').join('、');
-    const more = missing.length > 3 ? ` ほか ${missing.length - 3} 件` : '';
-    const tokens = (await getAllTokens()).map(t => t.token);
-    const res = await sendToTokens(
-      tokens,
-      `作業員人数 ${missing.length} 件未入力`,
-      `${sample}${more}（17時リマインド）`,
-      { kind: 'missing_worker_count', date: today, count: missing.length }
-    );
-    console.log('notifyMissingWorkerCount', { count: missing.length, ...res });
-  }
-);
+// ---------- #1 旧「17:00 作業員人数未入力リマインド」は notifyDailyReportPrompt に統合済みのため廃止 ----------
+// 関数本体は削除。デプロイ済みのものは Cloud Shell で
+//   firebase functions:delete notifyMissingWorkerCount --region asia-southeast1 --project genba-kanri-963a8
+// を実行して削除してください。
 
 // ---------- #3 他メンバーの更新通知（audit_logs 監視） ----------
 const CATEGORY_LABEL = {
