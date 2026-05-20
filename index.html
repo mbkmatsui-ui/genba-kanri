@@ -76,6 +76,19 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
+/* ダッシュボード：アプリアイコン風 角丸正方形ボタン */
+.dashboard-icon-actions { gap: 10px !important; }
+.dashboard-icon-btn { width: 72px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px; border: none; border-radius: 18px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.15; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,.18); transition: transform .12s, box-shadow .15s, filter .15s; flex-shrink: 0; font-family: inherit; text-align: center; -webkit-tap-highlight-color: transparent; }
+.dashboard-icon-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(0,0,0,.22); }
+.dashboard-icon-btn:active { transform: translateY(0); filter: brightness(.92); }
+.dashboard-icon-btn svg { width: 28px; height: 28px; display: block; }
+.dashboard-icon-btn span { display: block; white-space: nowrap; }
+.dashboard-icon-btn.report { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+.dashboard-icon-btn.add-project { background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); }
+@media (max-width: 480px) {
+  .dashboard-icon-btn { width: 64px; height: 64px; border-radius: 15px; font-size: 10px; gap: 3px; }
+  .dashboard-icon-btn svg { width: 24px; height: 24px; }
+}
 
 /* Buttons */
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius); font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; white-space: nowrap; }
@@ -1010,14 +1023,14 @@ body.is-admin .admin-only { display:flex; }
           <h2>ダッシュボード</h2>
           <div class="page-subtitle">全工事案件の概要</div>
         </div>
-        <div class="actions">
-          <button class="btn" id="btn-open-daily-report" style="background:#f59e0b;color:#fff;border:none">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-            本日の作業報告書（プレビュー）
+        <div class="actions dashboard-icon-actions">
+          <button class="dashboard-icon-btn report" id="btn-open-daily-report" title="本日の作業報告書">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="28" height="28"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+            <span>作業報告書</span>
           </button>
-          <button class="btn btn-primary" id="btn-add-project">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16"><path d="M12 5v14M5 12h14"/></svg>
-            新規工事案件
+          <button class="dashboard-icon-btn add-project" id="btn-add-project" title="新規工事案件">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" width="28" height="28"><path d="M12 5v14M5 12h14"/></svg>
+            <span>新規案件</span>
           </button>
         </div>
       </div>
