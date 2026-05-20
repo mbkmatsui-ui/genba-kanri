@@ -7225,6 +7225,22 @@ document.addEventListener('DOMContentLoaded', function(){
       // 通知ボタンの表示更新＋既許可ならトークン再保存
       try { updateNotifyBtn(); refreshFcmTokenIfGranted(); } catch(e) {}
 
+      // ?report=社長 などのディープリンクで作業報告書モーダルを自動オープン
+      try {
+        var reportParam = new URLSearchParams(location.search).get('report');
+        if (reportParam) {
+          setTimeout(function(){
+            try { openDailyReportModal(reportParam); } catch(e) { console.warn('openDailyReportModal failed:', e); }
+            // URL から ?report を取り除く（再表示防止）
+            try {
+              var url = new URL(location.href);
+              url.searchParams.delete('report');
+              history.replaceState(null, '', url.pathname + url.search + url.hash);
+            } catch(e) {}
+          }, 800);
+        }
+      } catch(e) {}
+
       // データ同期を開始（1回だけ）
       if (!_dataSubscribed) {
         _dataSubscribed = true;

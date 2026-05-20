@@ -77,6 +77,9 @@ async function sendToTokens(tokens, title, body, dataExtra) {
   // 値はすべて string に
   Object.keys(data).forEach(k => { data[k] = String(data[k] == null ? '' : data[k]); });
 
+  // dataExtra.url が指定されればそれを優先（タップ時の遷移先）
+  const tapLink = (dataExtra && dataExtra.url) || APP_URL;
+
   const message = {
     tokens,
     data,
@@ -87,7 +90,7 @@ async function sendToTokens(tokens, title, body, dataExtra) {
         icon: 'icons/icon-192.png',
         badge: 'icons/icon-192.png'
       },
-      fcmOptions: { link: APP_URL }
+      fcmOptions: { link: tapLink }
     }
   };
 
@@ -124,6 +127,141 @@ async function sendToTokens(tokens, title, body, dataExtra) {
   }
   return { sent: resp.successCount, failed: resp.failureCount, removed };
 }
+
+// ---------- 日本の祝日（2026〜2027 主な祝日）+ 振替休日 ----------
+// 必要に応じて RTDB の publicHolidays/YYYY-MM-DD = true で上書き可能
+const JP_HOLIDAYS_HARDCODED = {
+  // 2026
+  '2026-01-01': '元日',
+  '2026-01-12': '成人の日',
+  '2026-02-11': '建国記念の日',
+  '2026-02-23': '天皇誕生日',
+  '2026-03-20': '春分の日',
+  '2026-04-29': '昭和の日',
+  '2026-05-03': '憲法記念日',
+  '2026-05-04': 'みどりの日',
+  '2026-05-05': 'こどもの日',
+  '2026-05-06': '振替休日',
+  '2026-07-20': '海の日',
+  '2026-08-11': '山の日',
+  '2026-09-21': '敬老の日',
+  '2026-09-22': '国民の休日',
+  '2026-09-23': '秋分の日',
+  '2026-10-12': 'スポーツの日',
+  '2026-11-03': '文化の日',
+  '2026-11-23': '勤労感謝の日',
+  // 2027
+  '2027-01-01': '元日',
+  '2027-01-11': '成人の日',
+  '2027-02-11': '建国記念の日',
+  '2027-02-23': '天皇誕生日',
+  '2027-03-21': '春分の日',
+  '2027-03-22': '振替休日',
+  '2027-04-29': '昭和の日',
+  '2027-05-03': '憲法記念日',
+  '2027-05-04': 'みどりの日',
+  '2027-05-05': 'こどもの日',
+  '2027-07-19': '海の日',
+  '2027-08-11': '山の日',
+  '2027-09-20': '敬老の日',
+  '2027-09-23': '秋分の日',
+  '2027-10-11': 'スポーツの日',
+  '2027-11-03': '文化の日',
+  '2027-11-23': '勤労感謝の日'
+};
+async function isHolidayOrSundayJST(dateStr) {
+  // dateStr = YYYY-MM-DD（JST 基準）
+  const d = new Date(dateStr + 'T00:00:00+09:00');
+  const dow = d.getUTCDay(); // 日曜=0
+  // ※ getUTCDay は UTC ベースだが、+09:00 で固定したので曜日として正しい
+  if (dow === 0) return { holiday: true, reason: '日曜日' };
+  // ハードコード祝日
+  if (JP_HOLIDAYS_HARDCODED[dateStr]) {
+    return { holiday: true, reason: JP_HOLIDAYS_HARDCODED[dateStr] };
+  }
+  // RTDB 上書きチェック
+  try {
+    const snap = await admin.database().ref('publicHolidays/' + dateStr).get();
+    if (snap.exists() && snap.val()) {
+      return { holiday: true, reason: String(snap.val()) };
+    }
+  } catch (e) {}
+  return { holiday: false };
+}
+
+// ---------- 担当者名 → メール マッピング（RTDB 優先、コード fallback） ----------
+const ASSIGNEE_EMAIL_FALLBACK = {
+  '社長': 'mbk.matsui@gmail.com'
+  // '汐海': 'shiokai@example.com'  // ← Realtime Database の assigneeEmails/汐海 に登録
+};
+async function getAssigneeEmail(name) {
+  try {
+    const snap = await admin.database().ref('assigneeEmails/' + name).get();
+    const v = snap.val();
+    if (v && typeof v === 'string') return v.toLowerCase();
+  } catch (e) {}
+  const fb = ASSIGNEE_EMAIL_FALLBACK[name];
+  return fb ? fb.toLowerCase() : null;
+}
+
+// ---------- #5 作業報告書プロンプト（毎日 17:30 JST、日曜・祝日除外） ----------
+// 担当者（社長・汐海）にそれぞれ「本日の作業報告書を記入してください」
+exports.notifyDailyReportPrompt = onSchedule(
+  { schedule: '30 17 * * *', timeZone: TZ },
+  async () => {
+    const today = todayStrJST();
+    const hol = await isHolidayOrSundayJST(today);
+    if (hol.holiday) {
+      console.log('notifyDailyReportPrompt: skipped -', hol.reason, today);
+      return;
+    }
+    const data = await getData();
+    const projects = asArray(data.projects);
+    const tasks = asArray(data.tasks);
+    const ASSIGNEES = ['社長', '汐海'];
+    const allTokens = await getAllTokens();
+    for (const name of ASSIGNEES) {
+      // 担当案件の今日のタスク数
+      const projIds = {};
+      projects.forEach(p => { if (p && p.assignee === name) projIds[p.id] = true; });
+      const myTasks = tasks.filter(t =>
+        t && projIds[t.projectId] && t.startDate && t.endDate &&
+        t.startDate <= today && today <= t.endDate
+      );
+      if (!myTasks.length) {
+        console.log('notifyDailyReportPrompt: no tasks for', name);
+        continue;
+      }
+      // 既に報告書が記入済みかチェック（全部記入済みならスキップ）
+      const education = asArray(data.education);
+      const unreported = myTasks.filter(t =>
+        !education.some(e => e && e.taskId === t.id && e.date === today)
+      );
+      if (!unreported.length) {
+        console.log('notifyDailyReportPrompt: all reported for', name);
+        continue;
+      }
+      const email = await getAssigneeEmail(name);
+      if (!email) {
+        console.log('notifyDailyReportPrompt: no email mapping for', name, '— set RTDB assigneeEmails/'+name);
+        continue;
+      }
+      const tokens = allTokens.filter(t => t.email === email).map(t => t.token);
+      if (!tokens.length) {
+        console.log('notifyDailyReportPrompt: no tokens for', name, '(' + email + ')');
+        continue;
+      }
+      const link = APP_URL + '?report=' + encodeURIComponent(name);
+      const result = await sendToTokens(
+        tokens,
+        '📝 本日の作業報告書（' + name + '）',
+        '本日 ' + unreported.length + ' 件のタスクが未記入です。タップして報告書を開く',
+        { kind: 'daily_report', assignee: name, count: unreported.length, url: link }
+      );
+      console.log('notifyDailyReportPrompt sent to', name, result);
+    }
+  }
+);
 
 // ---------- #4 工事前日通知（毎朝 8:00 JST） ----------
 exports.notifyTomorrowStart = onSchedule(
