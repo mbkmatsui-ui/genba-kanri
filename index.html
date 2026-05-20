@@ -7018,12 +7018,30 @@ document.addEventListener('DOMContentLoaded', function(){
       // 通知ボタンの表示更新＋既許可ならトークン再保存
       try { updateNotifyBtn(); refreshFcmTokenIfGranted(); } catch(e) {}
 
-      // ?report=社長 などのディープリンクで作業報告書モーダルを自動オープン
+      // ?report=社長 や ?report=auto のディープリンクで作業報告書モーダルを自動オープン
       try {
         var reportParam = new URLSearchParams(location.search).get('report');
         if (reportParam) {
           setTimeout(function(){
-            try { openDailyReportModal(reportParam); } catch(e) { console.warn('openDailyReportModal failed:', e); }
+            try {
+              var name = reportParam;
+              if (name === 'auto' || name === '1') {
+                // ログイン中ユーザーのメール → assigneeEmails で担当者名を逆引き
+                fbDb.ref('assigneeEmails').once('value').then(function(snap){
+                  var map = snap.val() || {};
+                  var myEmail = (currentUser && currentUser.email || '').toLowerCase();
+                  var resolved = null;
+                  Object.keys(map).forEach(function(k){
+                    if (String(map[k]||'').toLowerCase() === myEmail) resolved = k;
+                  });
+                  try { openDailyReportModal(resolved || '社長'); } catch(e){ console.warn(e); }
+                }).catch(function(){
+                  try { openDailyReportModal('社長'); } catch(e){}
+                });
+              } else {
+                openDailyReportModal(name);
+              }
+            } catch(e) { console.warn('openDailyReportModal failed:', e); }
             // URL から ?report を取り除く（再表示防止）
             try {
               var url = new URL(location.href);
