@@ -466,12 +466,20 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .dr-worker-chip { padding: 7px 14px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 999px; font-family: inherit; font-size: 13px; cursor: pointer; color: var(--text); transition: all .12s; }
 .dr-worker-chip:hover { border-color: var(--primary); }
 .dr-worker-chip.selected { background: #2563eb; color: #fff; border-color: #2563eb; }
-.dr-worker-chip.custom { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.dr-worker-chip.custom { background: #fef3c7; border-color: #f59e0b; color: #92400e; display: inline-flex; align-items: center; gap: 6px; padding-right: 8px; }
 .dr-worker-chip.custom.selected { background: #f59e0b; color: #fff; }
+.dr-worker-chip-edit, .dr-worker-chip-remove { font-size: 11px; padding: 0 4px; opacity: .7; border-radius: 4px; line-height: 1; }
+.dr-worker-chip-edit:hover, .dr-worker-chip-remove:hover { opacity: 1; background: rgba(0,0,0,.15); }
+.dr-worker-chip-remove { font-size: 14px; font-weight: 700; }
 .dr-worker-custom { display: flex; gap: 6px; margin-bottom: 6px; }
 .dr-worker-custom input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; background: var(--bg-raised); color: var(--text); }
 .dr-worker-summary { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
 .dr-worker-summary .dr-worker-count { font-weight: 700; color: var(--text); }
+.today-report-badge { display: inline-block; font-size: 10px; padding: 2px 8px; color: #fff; border-radius: 999px; font-weight: 700; line-height: 1.4; }
+.today-report-badge.unreported { background: #dc2626; }
+@media print {
+  .today-report-badge { color: #000 !important; background: #fff !important; border: 1px solid #999; }
+}
 /* 発注者行：展開トグル */
 .client-table tr.client-row { cursor: pointer; }
 .client-table tr.client-row.expanded td { background: var(--bg-hover); }
@@ -669,6 +677,10 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .history-num { font-size:13px; font-weight:800; color:var(--primary); min-width:30px; text-align:right; flex-shrink:0; }
 .history-name { font-size:13px; font-weight:700; color:var(--text-main); flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .history-meta { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+.history-worker-summary { margin-top:6px; padding:6px 10px; background:#fff8e1; border-left:3px solid #f59e0b; font-size:12px; color:#5a3e0a; margin-left:38px; border-radius:3px; line-height:1.5; }
+@media (max-width: 640px) {
+  .history-worker-summary { margin-left:32px; font-size:11px; padding:5px 8px; }
+}
 @media (max-width: 768px) {
   .history-item { padding:9px 10px; }
   .history-row-main { gap:8px; }
@@ -2857,12 +2869,11 @@ function renderTodaySchedule() {
   var d=new Date(today+'T00:00:00');
   var days=['日','月','火','水','木','金','土'];
   var dateLabel=d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日（'+days[d.getDay()]+'）';
-  var statusLbl=function(s){ return {done:'完了',active:'進行中',pending:'未着手',delay:'遅延'}[s]||s; };
-  // 作業員人数の入力状況を集計
+  // 報告書未記入件数を集計
   var unfilledCount = 0;
   if(todayTasks.length > 0) {
     todayTasks.forEach(function(t){
-      var rec = data.education.find(function(e){ return e.taskId===t.id&&e.date===today; });
+      var rec = (data.education||[]).find(function(e){ return e && e.taskId===t.id && e.date===today; });
       if(!rec) unfilledCount++;
     });
   }
@@ -2874,22 +2885,22 @@ function renderTodaySchedule() {
       '<span class="today-section-date">'+dateLabel+'</span>'+
     '</div>';
 
-  // 作業員人数プロンプトバナー
+  // 作業報告書プロンプトバナー
   if(todayTasks.length > 0) {
     if(unfilledCount > 0) {
       html+='<div class="worker-prompt warn" id="worker-prompt-banner">'+
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>'+
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>'+
         '<div class="worker-prompt-text">'+
-          '本日 <strong id="worker-unfilled-count">'+unfilledCount+'件</strong> のタスクの作業員人数が未入力です'+
-          '<small>↓ 各タスクの＋／－で人数を設定し「保存」を押してください</small>'+
+          '本日 <strong id="worker-unfilled-count">'+unfilledCount+'件</strong> のタスクの作業報告書が未記入です'+
+          '<small>↑ 上の「本日の作業報告書」ボタンから記入してください</small>'+
         '</div>'+
       '</div>';
     } else {
       html+='<div class="worker-prompt done" id="worker-prompt-banner">'+
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'+
         '<div class="worker-prompt-text">'+
-          '本日の作業員人数をすべて入力しました！'+
-          '<small>お疲れ様です。記録は「教育記録」タブから確認できます</small>'+
+          '本日の作業報告書はすべて記入済みです！'+
+          '<small>お疲れ様です</small>'+
         '</div>'+
       '</div>';
     }
@@ -2904,11 +2915,17 @@ function renderTodaySchedule() {
       var pName=proj?proj.name:'';
       var pColor=proj?proj.color:'#999';
       var sc=statusColor(t.status);
-      var rec=data.education.find(function(e){ return e.taskId===t.id&&e.date===today; });
-      var isSaved = !!rec;
-      var curCount=rec?rec.count:0;
-      var stepperClass='worker-stepper'+(isSaved?' filled':' unfilled');
-      var stepperVal=curCount+'人';
+      var rec=(data.education||[]).find(function(e){ return e && e.taskId===t.id && e.date===today; });
+      var isReported = !!rec;
+      var workerCount = rec ? (rec.count != null ? rec.count : (rec.workers ? rec.workers.length : 0)) : 0;
+      var stLabel, stColor;
+      if (isReported) {
+        stLabel = (STATUS_LABEL_DR && STATUS_LABEL_DR[rec.status]) || '報告済';
+        stColor = rec.status==='done' ? '#16a34a' : (rec.status==='active' ? '#2563eb' : '#94a3b8');
+      } else {
+        stLabel = '未記入';
+        stColor = '#dc2626';
+      }
       html+='<div class="today-task-item" style="border-left-color:'+pColor+'" data-tid="'+t.id+'" data-pid="'+t.projectId+'">'+
         '<div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px">'+
           getTaskIconSVG(t.name,32)+
@@ -2918,18 +2935,9 @@ function renderTodaySchedule() {
           '</div>'+
         '</div>'+
         '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">'+
-          '<div style="font-size:13px;font-weight:700;color:'+sc+'">'+t.progress+'%</div>'+
-          '<div style="display:flex;align-items:center;gap:4px">'+
-            '<span style="font-size:10px;color:var(--text-muted)">👷</span>'+
-            '<div class="worker-stepper-wrap" data-tid="'+t.id+'">'+
-              '<div class="'+stepperClass+'" data-tid="'+t.id+'" data-count="'+curCount+'" data-pending="'+curCount+'" data-saved="'+(isSaved?'1':'0')+'">'+
-                '<button class="stepper-btn stepper-minus" type="button">－</button>'+
-                '<span class="stepper-val">'+stepperVal+'</span>'+
-                '<button class="stepper-btn stepper-plus" type="button">＋</button>'+
-              '</div>'+
-              '<button class="stepper-save hidden" type="button">保存</button>'+
-            '</div>'+
-          '</div>'+
+          '<div style="font-size:13px;font-weight:700;color:'+sc+'">'+(t.progress||0)+'%</div>'+
+          '<span class="today-report-badge" style="background:'+stColor+'">'+stLabel+'</span>'+
+          (isReported ? '<div style="font-size:10px;color:var(--text-muted)">👷 '+workerCount+'人</div>' : '')+
         '</div>'+
       '</div>';
     });
@@ -2937,86 +2945,9 @@ function renderTodaySchedule() {
   }
   html+='</div>';
   wrap.innerHTML=html;
-  function updateWorkerPrompt() {
-    var allSteppers = wrap.querySelectorAll('.worker-stepper');
-    var remaining = 0;
-    allSteppers.forEach(function(s){ if(s.dataset.saved!=='1') remaining++; }); // 保存済みフラグで判定（0人でも保存済みなら未入力扱いにしない）
-    var banner = qs('#worker-prompt-banner');
-    if(!banner) return;
-    if(remaining > 0) {
-      banner.className = 'worker-prompt warn';
-      banner.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="20" height="20"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>'+
-        '<div class="worker-prompt-text">本日 <strong>'+remaining+'件</strong> のタスクの作業員人数が未入力です<small>↓ 各タスクの＋／－ボタンから人数を入力してください</small></div>';
-    } else {
-      banner.className = 'worker-prompt done';
-      banner.innerHTML =
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'+
-        '<div class="worker-prompt-text">本日の作業員人数をすべて入力しました！<small>お疲れ様です。記録は「教育記録」タブから確認できます</small></div>';
-    }
-  }
 
-  wrap.querySelectorAll('.worker-stepper-wrap').forEach(function(swrap){
-    var stepper=swrap.querySelector('.worker-stepper');
-    var saveBtn=swrap.querySelector('.stepper-save');
-    var valEl=stepper.querySelector('.stepper-val');
-    // クロージャ変数で管理（datasetの文字列変換に依存しない）
-    var savedCount=Number(stepper.dataset.count); if(isNaN(savedCount)) savedCount=0;
-    var pendingCount=savedCount;
-    var touched=false; // ＋／－を1回でも触ったか（0人を意図的に保存するときの判定用）
-
-    function applyStyle(){
-      var dirty=(pendingCount!==savedCount);
-      var isSaved=(stepper.dataset.saved==='1');
-      stepper.classList.remove('unfilled','filled','pending');
-      if(dirty)        stepper.classList.add('pending');
-      else if(isSaved) stepper.classList.add('filled');
-      else if(touched) stepper.classList.add('pending'); // 触ったが値は0のまま → 保存意思あり
-      else             stepper.classList.add('unfilled');
-      // 値変更あり or 未保存状態で触った時に保存ボタンを表示
-      if(dirty || (touched && !isSaved)) saveBtn.classList.remove('hidden');
-      else                                saveBtn.classList.add('hidden');
-    }
-    stepper.querySelector('.stepper-minus').addEventListener('click',function(e){
-      e.stopPropagation();
-      touched=true;
-      if(pendingCount>0) pendingCount--;
-      valEl.textContent=pendingCount>0?pendingCount+'人':'0人';
-      applyStyle();
-    });
-    stepper.querySelector('.stepper-plus').addEventListener('click',function(e){
-      e.stopPropagation();
-      touched=true;
-      if(pendingCount<99) pendingCount++;
-      valEl.textContent=pendingCount+'人';
-      applyStyle();
-    });
-    saveBtn.addEventListener('click',function(e){
-      e.stopPropagation();
-      savedCount=pendingCount;
-      touched=false; // 保存したのでリセット
-      stepper.dataset.count=savedCount; // updateWorkerPrompt用に同期
-      stepper.dataset.saved='1';        // 0人でも明示保存したらフラグON
-      var tid=stepper.dataset.tid;
-      data.education=data.education.filter(function(r){ return !(r.taskId===tid&&r.date===today); });
-      data.education.push({taskId:tid,date:today,count:savedCount});
-      saveData(data);
-      updateWorkerPrompt();
-      stepper.classList.remove('unfilled','filled','pending');
-      stepper.classList.add('filled');
-      saveBtn.classList.remove('hidden');
-      saveBtn.textContent='✓ 保存済';
-      saveBtn.style.background='#16a34a';
-      setTimeout(function(){
-        saveBtn.textContent='保存';
-        saveBtn.style.background='';
-        saveBtn.classList.add('hidden');
-      },1200);
-    });
-  });
   wrap.querySelectorAll('.today-task-item').forEach(function(el){
     el.addEventListener('click',function(e){
-      if(e.target.closest('.worker-stepper-wrap')) return;
       var pid = el.dataset.pid;
       var tid = el.dataset.tid;
       // 順序が大事：選択タスクを先にセット → そのあと navigate して renderGantt が選択状態を反映できるように
@@ -3811,7 +3742,14 @@ function archiveProject(p, fromDelete) {
   var workerRecords = (data.education||[])
     .filter(function(e){ return taskNameById[e.taskId]; })
     .map(function(e){
-      return { date: e.date, taskName: taskNameById[e.taskId], count: e.count };
+      return {
+        date: e.date,
+        taskName: taskNameById[e.taskId],
+        count: e.count,
+        workers: Array.isArray(e.workers) ? e.workers.slice() : [],
+        progressNote: e.progressNote || '',
+        status: e.status || ''
+      };
     })
     .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
   var taskSummary = projTasks.map(function(t){
@@ -4166,10 +4104,50 @@ function stopViewArchivedProject() {
   document.body.classList.remove('viewing-archived');
 }
 
+// 案件の workerRecords を data.education から動的に算出（未アーカイブ用）
+function computeWorkerRecordsFor(projectId) {
+  var projTasks = (data.tasks||[]).filter(function(t){ return t.projectId===projectId; });
+  var taskNameById = {};
+  projTasks.forEach(function(t){ taskNameById[t.id] = t.name; });
+  return (data.education||[])
+    .filter(function(e){ return e && taskNameById[e.taskId]; })
+    .map(function(e){
+      return {
+        date: e.date,
+        taskName: taskNameById[e.taskId],
+        count: e.count,
+        workers: Array.isArray(e.workers) ? e.workers.slice() : [],
+        progressNote: e.progressNote || '',
+        status: e.status || ''
+      };
+    })
+    .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+}
+
+// 作業員名の出勤日数を集計：{植木:2, 金谷:3} → "植木×2、金谷×3"
+function aggregateWorkerNameCounts(workerRecords) {
+  var counts = {};
+  (workerRecords||[]).forEach(function(r){
+    (Array.isArray(r.workers) ? r.workers : []).forEach(function(w){
+      if (!w) return;
+      counts[w] = (counts[w] || 0) + 1;
+    });
+  });
+  return counts;
+}
+function formatWorkerCounts(counts) {
+  return Object.keys(counts)
+    .sort(function(a,b){ return counts[b]-counts[a]; })
+    .map(function(w){ return counts[w]>1 ? (w+'×'+counts[w]) : w; })
+    .join('、');
+}
+
 function renderHistory() {
   // Combine archived + still-existing completed projects
   var archived = (data.archivedProjects || []).map(function(p){ return Object.assign({}, p, {isArchived:true}); });
-  var active = data.projects.filter(function(p){ return p.status==='completed'; }).map(function(p){ return Object.assign({}, p, {isArchived:false}); });
+  var active = data.projects.filter(function(p){ return p.status==='completed'; }).map(function(p){
+    return Object.assign({}, p, {isArchived:false, workerRecords: computeWorkerRecordsFor(p.id)});
+  });
   // Merge, archived projects take priority if same id
   var archivedIds = archived.map(function(p){ return p.id; });
   var combined = archived.concat(active.filter(function(p){ return archivedIds.indexOf(p.id)<0; }));
@@ -4245,6 +4223,8 @@ function renderHistory() {
       var num = i + 1;
       var endFmt = p.endDate ? p.endDate.replace(/-/g,'/') : '—';
       var workersInProj = (p.workerRecords||[]).reduce(function(s,r){ return s+(r.count||0); }, 0);
+      var workerCounts = aggregateWorkerNameCounts(p.workerRecords);
+      var workerNamesLabel = formatWorkerCounts(workerCounts);
       var badge = p.isFromDelete
         ? '<span class="history-archived-badge">削除済</span>'
         : '<span class="history-badge">完了</span>';
@@ -4266,8 +4246,9 @@ function renderHistory() {
           badge+
           '<span class="history-meta">'+escHtml(p.client||'')+'</span>'+
           '<span class="history-meta">竣工 '+endFmt+'</span>'+
-          '<span class="history-meta" style="color:var(--primary);font-weight:700">作業員 '+workersInProj+' 人</span>'+
+          '<span class="history-meta" style="color:var(--primary);font-weight:700">延べ '+workersInProj+' 人</span>'+
         '</div>'+
+        (workerNamesLabel ? '<div class="history-worker-summary">作業員：'+escHtml(workerNamesLabel)+'</div>' : '')+
       '</div>';
     }).join('')+
     '</div>';
@@ -4369,6 +4350,11 @@ function printHistory(monthKey, projects) {
     var num = i+1;
     var records = (p.workerRecords||[]).slice().sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
     var pWorkers = records.reduce(function(s,r){ return s+(r.count||0); }, 0);
+    var workerCounts = aggregateWorkerNameCounts(records);
+    var workerNamesLabel = formatWorkerCounts(workerCounts);
+    var workerSummaryRow = workerNamesLabel
+      ? '<div class="worker-name-summary"><strong>作業員：</strong>'+escHtml(workerNamesLabel)+'</div>'
+      : '';
     if (records.length === 0) {
       return '<div class="proj-detail"><h3>No.'+(num<10?'0':'')+num+'　'+escHtml(p.name)+'</h3>'+
         '<div class="proj-meta">発注者：'+escHtml(p.client||'—')+'　／　工期：'+(p.startDate||'—').replace(/-/g,'/')+' 〜 '+(p.endDate||'—').replace(/-/g,'/')+'</div>'+
@@ -4376,15 +4362,29 @@ function printHistory(monthKey, projects) {
       '</div>';
     }
     var detailRows = records.map(function(r){
-      return '<tr><td>'+r.date.replace(/-/g,'/')+'</td><td>'+escHtml(r.taskName||'—')+'</td><td style="text-align:center">'+r.count+' 人</td></tr>';
+      var rowWorkers = Array.isArray(r.workers) ? r.workers.join('、') : '';
+      return '<tr><td>'+r.date.replace(/-/g,'/')+'</td><td>'+escHtml(r.taskName||'—')+'</td><td style="text-align:center">'+r.count+' 人</td><td>'+escHtml(rowWorkers)+'</td></tr>';
     }).join('');
     return '<div class="proj-detail">'+
       '<h3>No.'+(num<10?'0':'')+num+'　'+escHtml(p.name)+'</h3>'+
       '<div class="proj-meta">発注者：'+escHtml(p.client||'—')+'　／　工期：'+(p.startDate||'—').replace(/-/g,'/')+' 〜 '+(p.endDate||'—').replace(/-/g,'/')+'　／　延べ作業員 <strong>'+pWorkers+' 人</strong></div>'+
-      '<table class="detail-table"><thead><tr><th style="width:110px">日付</th><th>タスク</th><th style="width:80px">作業員</th></tr></thead>'+
+      workerSummaryRow+
+      '<table class="detail-table"><thead><tr><th style="width:90px">日付</th><th>タスク</th><th style="width:60px">人数</th><th>作業員名</th></tr></thead>'+
       '<tbody>'+detailRows+'</tbody></table>'+
     '</div>';
   }).join('');
+
+  // 月全体の作業員サマリー
+  var monthCounts = {};
+  projects.forEach(function(p){
+    var c = aggregateWorkerNameCounts(p.workerRecords);
+    Object.keys(c).forEach(function(w){ monthCounts[w] = (monthCounts[w]||0) + c[w]; });
+  });
+  var monthWorkerSummary = formatWorkerCounts(monthCounts);
+  var monthWorkerHtml = monthWorkerSummary
+    ? '<div class="month-worker-summary"><h2>'+monthLabel+'　作業員出勤集計（延べ日数）</h2>'+
+      '<div class="worker-name-summary">'+escHtml(monthWorkerSummary)+'</div></div>'
+    : '';
 
   var html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
     '<title>'+monthLabel+' 完了工事一覧</title>'+
@@ -4406,10 +4406,14 @@ function printHistory(monthKey, projects) {
       '.detail-table td{padding:5px 8px;font-size:11px;}'+
       '.detail-table tr:nth-child(even) td{background:#fafafa;}'+
       '.no-records{font-size:11px;color:#888;padding:6px 10px;font-style:italic;}'+
+      '.worker-name-summary{margin:4px 14px 10px;padding:6px 10px;background:#fff8e1;border-left:3px solid #f59e0b;font-size:12px;line-height:1.6;}'+
+      '.month-worker-summary{margin-bottom:18px;page-break-inside:avoid;}'+
+      '.month-worker-summary .worker-name-summary{margin-left:0;font-size:13px;}'+
       '@media print{body{margin:12px;}.proj-detail{page-break-inside:avoid;}}'+
     '</style></head><body>'+
     '<h1>'+monthLabel+'　完了工事一覧</h1>'+
     '<div class="meta">印刷日：'+dateLabel+'　／　合計：'+projects.length+'件　／　延べ作業員：'+totalWorkers+' 人</div>'+
+    monthWorkerHtml+
     detailHtml+
     '</body></html>';
   var w=window.open('','_blank','width=900,height=600');
@@ -5672,7 +5676,7 @@ function _renderSchedule_OLD_UNUSED() {
 }
 
 // ===== 作業報告書（雛形・サンプル） =====
-var PRESET_WORKERS = ['植木','金谷','星野','川上','石崎','タクヤ'];
+var PRESET_WORKERS = ['社長','汐海','植木','金谷','星野','川上','石崎','タクヤ'];
 var STATUS_LABEL_DR = { pending:'準備中', active:'施行中', done:'完了' };
 
 // 担当者（社長/汐海）の今日担当タスクを抽出
@@ -5693,9 +5697,21 @@ function getReportTasks(assignee, dateStr) {
 
 function dailyReportTaskCardHtml(entry) {
   var t = entry.task, p = entry.project;
-  var status = t.status || 'pending';
-  if (t.workCompleted) status = 'done';
-  var note = t.completionNote || '';
+  var today = todayStr();
+  // 既存の保存内容（同タスク・同日）を復元
+  var existing = (data.education||[]).find(function(e){ return e && e.taskId === t.id && e.date === today; });
+  var status = (existing && existing.status) || t.status || 'pending';
+  if (!existing && t.workCompleted) status = 'done';
+  var progressNote = (existing && existing.progressNote) || ((status==='active') ? (t.completionNote||'') : '');
+  var existingWorkers = (existing && Array.isArray(existing.workers)) ? existing.workers : [];
+  var workerSet = {};
+  existingWorkers.forEach(function(w){ workerSet[w] = true; });
+
+  var presetHtml = PRESET_WORKERS.map(function(w){
+    var sel = workerSet[w] ? ' selected' : '';
+    return '<button type="button" class="dr-worker-chip'+sel+'" data-worker="'+escHtml(w)+'">'+escHtml(w)+'</button>';
+  }).join('');
+
   return '<div class="dr-task-card" data-tid="'+t.id+'" data-pid="'+t.projectId+'">'+
     '<div class="dr-task-header">'+
       '<div class="dr-task-name">'+escHtml(t.name||'(無題)')+'</div>'+
@@ -5709,16 +5725,12 @@ function dailyReportTaskCardHtml(entry) {
         }).join('')+
       '</div>'+
       '<div class="dr-progress-detail" style="'+(status==='active'?'':'display:none')+'">'+
-        '<textarea placeholder="施行中の作業内容や進行具合を記入（例：基礎打設完了、明日は配筋）" data-progress>'+escHtml(note)+'</textarea>'+
+        '<textarea placeholder="施行中の作業内容や進行具合を記入（例：基礎打設完了、明日は配筋）" data-progress>'+escHtml(progressNote)+'</textarea>'+
       '</div>'+
     '</div>'+
     '<div class="dr-section">'+
       '<label class="dr-label">作業員（複数選択可）</label>'+
-      '<div class="dr-worker-chips">'+
-        PRESET_WORKERS.map(function(w){
-          return '<button type="button" class="dr-worker-chip" data-worker="'+escHtml(w)+'">'+escHtml(w)+'</button>';
-        }).join('')+
-      '</div>'+
+      '<div class="dr-worker-chips">'+presetHtml+'</div>'+
       '<div class="dr-worker-custom">'+
         '<input type="text" class="dr-worker-input" placeholder="その他の作業員名を直接入力" />'+
         '<button type="button" class="btn btn-ghost btn-sm dr-worker-add">追加</button>'+
@@ -5745,6 +5757,20 @@ function openDailyReportModal(assignee, isReopen) {
     body.innerHTML = '<div class="dr-empty">'+escHtml(pickedAssignee)+' さんの本日担当タスクはありません</div>';
   } else {
     body.innerHTML = entries.map(dailyReportTaskCardHtml).join('');
+    // 既存報告の non-preset 作業員チップを復元
+    body.querySelectorAll('.dr-task-card').forEach(function(card){
+      var tid = card.dataset.tid;
+      var existing = (data.education||[]).find(function(e){ return e && e.taskId === tid && e.date === today; });
+      if (existing && Array.isArray(existing.workers)) {
+        var chipsWrap = card.querySelector('.dr-worker-chips');
+        existing.workers.forEach(function(w){
+          if (PRESET_WORKERS.indexOf(w) === -1) {
+            chipsWrap.appendChild(makeCustomWorkerChip(w, card));
+          }
+        });
+      }
+      updateWorkerSummary(card);
+    });
     // ステータスボタンのトグル
     body.querySelectorAll('.dr-task-card').forEach(function(card){
       card.querySelectorAll('.dr-status-btn').forEach(function(btn){
@@ -5756,8 +5782,8 @@ function openDailyReportModal(assignee, isReopen) {
           detail.style.display = (s==='active') ? '' : 'none';
         });
       });
-      // 作業員チップ
-      card.querySelectorAll('.dr-worker-chip').forEach(function(chip){
+      // 作業員チップ（custom は makeCustomWorkerChip 内で既にバインド済みなのでスキップ）
+      card.querySelectorAll('.dr-worker-chip:not(.custom)').forEach(function(chip){
         chip.addEventListener('click', function(){
           chip.classList.toggle('selected');
           updateWorkerSummary(card);
@@ -5776,15 +5802,7 @@ function openDailyReportModal(assignee, isReopen) {
           if (c.dataset.worker === name) { c.classList.add('selected'); exists = true; }
         });
         if (!exists) {
-          var newChip = document.createElement('button');
-          newChip.type = 'button';
-          newChip.className = 'dr-worker-chip custom selected';
-          newChip.dataset.worker = name;
-          newChip.textContent = name;
-          newChip.addEventListener('click', function(){
-            newChip.classList.toggle('selected');
-            updateWorkerSummary(card);
-          });
+          var newChip = makeCustomWorkerChip(name, card);
           chips.appendChild(newChip);
         }
         customInput.value = '';
@@ -5797,6 +5815,44 @@ function openDailyReportModal(assignee, isReopen) {
   modal.classList.remove('hidden');
 }
 
+// 直接入力された作業員のチップ生成（編集・削除可）
+function makeCustomWorkerChip(name, card) {
+  var chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'dr-worker-chip custom selected';
+  chip.dataset.worker = name;
+  chip.innerHTML = '<span class="dr-worker-chip-text"></span>'+
+                   '<span class="dr-worker-chip-edit" title="名前を編集">✎</span>'+
+                   '<span class="dr-worker-chip-remove" title="削除">×</span>';
+  chip.querySelector('.dr-worker-chip-text').textContent = name;
+  chip.addEventListener('click', function(e){
+    var t = e.target;
+    if (t.classList.contains('dr-worker-chip-edit')) {
+      e.stopPropagation();
+      var current = chip.dataset.worker;
+      var newName = (prompt('作業員名を編集', current) || '').trim();
+      if (!newName || newName === current) return;
+      // 重複チェック（同カード内）
+      var dup = false;
+      card.querySelectorAll('.dr-worker-chip').forEach(function(c){
+        if (c !== chip && c.dataset.worker === newName) dup = true;
+      });
+      if (dup) { toast('同じ名前のチップが既にあります','error'); return; }
+      chip.dataset.worker = newName;
+      chip.querySelector('.dr-worker-chip-text').textContent = newName;
+      updateWorkerSummary(card);
+    } else if (t.classList.contains('dr-worker-chip-remove')) {
+      e.stopPropagation();
+      chip.remove();
+      updateWorkerSummary(card);
+    } else {
+      chip.classList.toggle('selected');
+      updateWorkerSummary(card);
+    }
+  });
+  return chip;
+}
+
 function updateWorkerSummary(card) {
   var selected = card.querySelectorAll('.dr-worker-chip.selected');
   var names = [];
@@ -5805,26 +5861,56 @@ function updateWorkerSummary(card) {
   card.querySelector('.dr-worker-names').textContent = names.length ? '（'+names.join('、')+'）' : '';
 }
 
-// サンプル段階：保存ロジックはまだ未実装。雛形の見た目確認用。
+// 本番保存：task.status / education(workers,progressNote) を更新
 function saveDailyReport() {
   var assignee = qs('#dr-assignee-sel').value;
   var cards = qsa('#dr-body .dr-task-card');
   if (!cards.length) { toast('保存対象のタスクがありません','error'); return; }
-  var report = { date: todayStr(), assignee: assignee, tasks: [] };
+  var today = todayStr();
+  var savedCount = 0;
   cards.forEach(function(card){
+    var tid = card.dataset.tid;
+    var task = (data.tasks||[]).find(function(t){ return t.id === tid; });
+    if (!task) return;
     var statusBtn = card.querySelector('.dr-status-btn.active');
+    var status = statusBtn ? statusBtn.dataset.status : 'pending';
     var workers = [];
     card.querySelectorAll('.dr-worker-chip.selected').forEach(function(c){ workers.push(c.dataset.worker); });
-    var detail = card.querySelector('.dr-progress-detail textarea[data-progress]');
-    report.tasks.push({
-      taskId: card.dataset.tid,
-      status: statusBtn ? statusBtn.dataset.status : 'pending',
-      progressNote: detail ? detail.value : '',
-      workers: workers
+    var progressNote = '';
+    var noteEl = card.querySelector('.dr-progress-detail textarea[data-progress]');
+    if (noteEl && status === 'active') progressNote = (noteEl.value || '').trim();
+
+    // task 側を更新
+    task.status = status;
+    if (status === 'done') {
+      task.workCompleted = true;
+      task.progress = 100;
+      if (progressNote && !task.completionNote) task.completionNote = progressNote;
+    } else if (status === 'active') {
+      task.workCompleted = false;
+    } else { // pending
+      task.workCompleted = false;
+    }
+
+    // education を upsert：同 taskId+date は置換
+    data.education = (data.education||[]).filter(function(r){ return !(r.taskId===tid && r.date===today); });
+    data.education.push({
+      taskId: tid,
+      date: today,
+      count: workers.length,
+      workers: workers.slice(),
+      assignee: assignee,
+      status: status,
+      progressNote: progressNote,
+      submittedAt: Date.now()
     });
+    savedCount++;
   });
-  console.log('[サンプル] 報告書内容:', report);
-  toast('サンプル段階のため保存ロジックは未実装です。コンソールに内容を出力しました','info');
+  saveData(data);
+  qs('#modal-daily-report').classList.add('hidden');
+  toast(savedCount + '件のタスクを報告書として保存しました','success');
+  // 関連表示の更新
+  try { if (state.view === 'dashboard') renderDashboard(); } catch(e) {}
 }
 
 // ===== Clients =====
@@ -7138,6 +7224,22 @@ document.addEventListener('DOMContentLoaded', function(){
 
       // 通知ボタンの表示更新＋既許可ならトークン再保存
       try { updateNotifyBtn(); refreshFcmTokenIfGranted(); } catch(e) {}
+
+      // ?report=社長 などのディープリンクで作業報告書モーダルを自動オープン
+      try {
+        var reportParam = new URLSearchParams(location.search).get('report');
+        if (reportParam) {
+          setTimeout(function(){
+            try { openDailyReportModal(reportParam); } catch(e) { console.warn('openDailyReportModal failed:', e); }
+            // URL から ?report を取り除く（再表示防止）
+            try {
+              var url = new URL(location.href);
+              url.searchParams.delete('report');
+              history.replaceState(null, '', url.pathname + url.search + url.hash);
+            } catch(e) {}
+          }, 800);
+        }
+      } catch(e) {}
 
       // データ同期を開始（1回だけ）
       if (!_dataSubscribed) {
