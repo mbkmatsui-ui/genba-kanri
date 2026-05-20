@@ -466,8 +466,11 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .dr-worker-chip { padding: 7px 14px; background: var(--bg-raised); border: 1px solid var(--border); border-radius: 999px; font-family: inherit; font-size: 13px; cursor: pointer; color: var(--text); transition: all .12s; }
 .dr-worker-chip:hover { border-color: var(--primary); }
 .dr-worker-chip.selected { background: #2563eb; color: #fff; border-color: #2563eb; }
-.dr-worker-chip.custom { background: #fef3c7; border-color: #f59e0b; color: #92400e; }
+.dr-worker-chip.custom { background: #fef3c7; border-color: #f59e0b; color: #92400e; display: inline-flex; align-items: center; gap: 6px; padding-right: 8px; }
 .dr-worker-chip.custom.selected { background: #f59e0b; color: #fff; }
+.dr-worker-chip-edit, .dr-worker-chip-remove { font-size: 11px; padding: 0 4px; opacity: .7; border-radius: 4px; line-height: 1; }
+.dr-worker-chip-edit:hover, .dr-worker-chip-remove:hover { opacity: 1; background: rgba(0,0,0,.15); }
+.dr-worker-chip-remove { font-size: 14px; font-weight: 700; }
 .dr-worker-custom { display: flex; gap: 6px; margin-bottom: 6px; }
 .dr-worker-custom input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; background: var(--bg-raised); color: var(--text); }
 .dr-worker-summary { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
@@ -5672,7 +5675,7 @@ function _renderSchedule_OLD_UNUSED() {
 }
 
 // ===== 作業報告書（雛形・サンプル） =====
-var PRESET_WORKERS = ['植木','金谷','星野','川上','石崎','タクヤ'];
+var PRESET_WORKERS = ['社長','汐海','植木','金谷','星野','川上','石崎','タクヤ'];
 var STATUS_LABEL_DR = { pending:'準備中', active:'施行中', done:'完了' };
 
 // 担当者（社長/汐海）の今日担当タスクを抽出
@@ -5776,15 +5779,7 @@ function openDailyReportModal(assignee, isReopen) {
           if (c.dataset.worker === name) { c.classList.add('selected'); exists = true; }
         });
         if (!exists) {
-          var newChip = document.createElement('button');
-          newChip.type = 'button';
-          newChip.className = 'dr-worker-chip custom selected';
-          newChip.dataset.worker = name;
-          newChip.textContent = name;
-          newChip.addEventListener('click', function(){
-            newChip.classList.toggle('selected');
-            updateWorkerSummary(card);
-          });
+          var newChip = makeCustomWorkerChip(name, card);
           chips.appendChild(newChip);
         }
         customInput.value = '';
@@ -5795,6 +5790,44 @@ function openDailyReportModal(assignee, isReopen) {
     });
   }
   modal.classList.remove('hidden');
+}
+
+// 直接入力された作業員のチップ生成（編集・削除可）
+function makeCustomWorkerChip(name, card) {
+  var chip = document.createElement('button');
+  chip.type = 'button';
+  chip.className = 'dr-worker-chip custom selected';
+  chip.dataset.worker = name;
+  chip.innerHTML = '<span class="dr-worker-chip-text"></span>'+
+                   '<span class="dr-worker-chip-edit" title="名前を編集">✎</span>'+
+                   '<span class="dr-worker-chip-remove" title="削除">×</span>';
+  chip.querySelector('.dr-worker-chip-text').textContent = name;
+  chip.addEventListener('click', function(e){
+    var t = e.target;
+    if (t.classList.contains('dr-worker-chip-edit')) {
+      e.stopPropagation();
+      var current = chip.dataset.worker;
+      var newName = (prompt('作業員名を編集', current) || '').trim();
+      if (!newName || newName === current) return;
+      // 重複チェック（同カード内）
+      var dup = false;
+      card.querySelectorAll('.dr-worker-chip').forEach(function(c){
+        if (c !== chip && c.dataset.worker === newName) dup = true;
+      });
+      if (dup) { toast('同じ名前のチップが既にあります','error'); return; }
+      chip.dataset.worker = newName;
+      chip.querySelector('.dr-worker-chip-text').textContent = newName;
+      updateWorkerSummary(card);
+    } else if (t.classList.contains('dr-worker-chip-remove')) {
+      e.stopPropagation();
+      chip.remove();
+      updateWorkerSummary(card);
+    } else {
+      chip.classList.toggle('selected');
+      updateWorkerSummary(card);
+    }
+  });
+  return chip;
 }
 
 function updateWorkerSummary(card) {
