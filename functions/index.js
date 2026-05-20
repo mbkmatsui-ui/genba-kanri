@@ -205,7 +205,7 @@ async function getAssigneeEmail(name) {
 }
 
 // ---------- #5 作業報告書プロンプト（毎日 17:30 JST、日曜・祝日除外） ----------
-// 担当者（社長・汐海）にそれぞれ「本日の作業報告書を記入してください」
+// 全担当者（社長・汐海…）の未記入状況を 1 通のサマリーとして両者へ一括送信
 exports.notifyDailyReportPrompt = onSchedule(
   { schedule: '30 17 * * *', timeZone: TZ },
   async () => {
@@ -218,48 +218,72 @@ exports.notifyDailyReportPrompt = onSchedule(
     const data = await getData();
     const projects = asArray(data.projects);
     const tasks = asArray(data.tasks);
+    const education = asArray(data.education);
     const ASSIGNEES = ['社長', '汐海'];
-    const allTokens = await getAllTokens();
+
+    // 各担当者の未記入を集計
+    const summary = []; // [{ name, count, taskNames[] }]
     for (const name of ASSIGNEES) {
-      // 担当案件の今日のタスク数
       const projIds = {};
       projects.forEach(p => { if (p && p.assignee === name) projIds[p.id] = true; });
       const myTasks = tasks.filter(t =>
         t && projIds[t.projectId] && t.startDate && t.endDate &&
         t.startDate <= today && today <= t.endDate
       );
-      if (!myTasks.length) {
-        console.log('notifyDailyReportPrompt: no tasks for', name);
-        continue;
-      }
-      // 既に報告書が記入済みかチェック（全部記入済みならスキップ）
-      const education = asArray(data.education);
       const unreported = myTasks.filter(t =>
         !education.some(e => e && e.taskId === t.id && e.date === today)
       );
-      if (!unreported.length) {
-        console.log('notifyDailyReportPrompt: all reported for', name);
-        continue;
+      if (unreported.length > 0) {
+        summary.push({
+          name,
+          count: unreported.length,
+          taskNames: unreported.slice(0, 3).map(t => t.name || '無題')
+        });
       }
-      const email = await getAssigneeEmail(name);
-      if (!email) {
-        console.log('notifyDailyReportPrompt: no email mapping for', name, '— set RTDB assigneeEmails/'+name);
-        continue;
-      }
-      const tokens = allTokens.filter(t => t.email === email).map(t => t.token);
-      if (!tokens.length) {
-        console.log('notifyDailyReportPrompt: no tokens for', name, '(' + email + ')');
-        continue;
-      }
-      const link = APP_URL + '?report=' + encodeURIComponent(name);
-      const result = await sendToTokens(
-        tokens,
-        '📝 本日の作業報告書（' + name + '）',
-        '本日 ' + unreported.length + ' 件のタスクが未記入です。タップして報告書を開く',
-        { kind: 'daily_report', assignee: name, count: unreported.length, url: link }
-      );
-      console.log('notifyDailyReportPrompt sent to', name, result);
     }
+
+    if (summary.length === 0) {
+      console.log('notifyDailyReportPrompt: all reported');
+      return;
+    }
+
+    // 配信先：登録されている担当者全員（記入済み・未記入問わず）
+    const allTokens = await getAllTokens();
+    const recipientEmails = [];
+    for (const name of ASSIGNEES) {
+      const email = await getAssigneeEmail(name);
+      if (email) recipientEmails.push(email);
+    }
+    if (recipientEmails.length === 0) {
+      console.log('notifyDailyReportPrompt: no assigneeEmails configured');
+      return;
+    }
+    const tokens = allTokens
+      .filter(t => recipientEmails.indexOf(t.email) !== -1)
+      .map(t => t.token);
+    if (tokens.length === 0) {
+      console.log('notifyDailyReportPrompt: no FCM tokens for', recipientEmails);
+      return;
+    }
+
+    // 通知文を構築：「社長：3件未記入（屋根工事、雨樋工事）／汐海：2件…」
+    const bodyParts = summary.map(s => {
+      const more = s.count > 3 ? ' ほか' + (s.count - 3) + '件' : '';
+      return s.name + ' さん：' + s.count + ' 件未記入（' + s.taskNames.join('、') + more + '）';
+    });
+    const totalUnreported = summary.reduce((acc, s) => acc + s.count, 0);
+    const namesOnly = summary.map(s => s.name + '(' + s.count + ')').join('、');
+    const title = '📝 本日の作業報告書 未記入：' + namesOnly;
+    const body = bodyParts.join('\n');
+
+    // タップ時：自分の担当名でモーダルを開く（アプリ側で email→assignee 名にマッピング）
+    const link = APP_URL + '?report=auto';
+
+    const result = await sendToTokens(
+      tokens, title, body,
+      { kind: 'daily_report_summary', total: totalUnreported, names: namesOnly, url: link }
+    );
+    console.log('notifyDailyReportPrompt sent', { recipients: recipientEmails.length, summary, result });
   }
 );
 
