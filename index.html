@@ -2134,6 +2134,8 @@ var _isOffline = false;
 // 自分の書き込み進行中（_pendingWrites>0）に届いた cloud snapshot をバッファして、
 // 全書き込み完了後に適用する。これによりローカル編集の上書きを防ぐ。
 var _pendingCloudSnap = null;
+// 直近に受信したクラウド snapshot（マージ判定のベースライン）
+var _lastAppliedCloud = null;
 
 function setSyncStatus(state) {
   var btn = qs('#sync-status-btn');
@@ -2176,13 +2178,39 @@ function formatSyncTime(ts) {
 }
 
 // クラウドの値をローカル data へ反映するヘルパー（複数箇所で再利用）
+// ローカルに未保存の編集がある場合はマージして上書き消失を防ぐ
 function applyCloudData(cloud) {
   if (!cloud) return;
   try { ensureDataDefaults(cloud); } catch(e) {}
+
+  var merged = cloud;
+  try {
+    if (_lastAppliedCloud && data) {
+      var unsavedDelta = computeDataDelta(_lastAppliedCloud, data);
+      // 未保存の変更があるか判定
+      function hasArrChange(a){ return (a.added && a.added.length) || (a.deletedIds && a.deletedIds.length) || (a.updated && Object.keys(a.updated).length); }
+      var hasUnsaved = hasArrChange(unsavedDelta.projects)
+                    || hasArrChange(unsavedDelta.tasks)
+                    || hasArrChange(unsavedDelta.clients)
+                    || hasArrChange(unsavedDelta.photos)
+                    || hasArrChange(unsavedDelta.drawings)
+                    || hasArrChange(unsavedDelta.archivedProjects)
+                    || (unsavedDelta.education.upserts && unsavedDelta.education.upserts.length)
+                    || (unsavedDelta.education.deletedKeys && unsavedDelta.education.deletedKeys.length)
+                    || !!unsavedDelta.settings;
+      if (hasUnsaved) {
+        merged = applyDelta(cloud, unsavedDelta);
+        console.log('[cloudSync] preserved local unsaved changes during sync');
+      }
+    }
+  } catch(e) { console.warn('[cloudSync] merge failed, using cloud as-is:', e); merged = cloud; }
+
   _suppressAuditNext = true;
-  data = cloud;
+  data = merged;
+  // _prevDataSnapshot は「クラウドが持っている値」基準にして、未送信ローカル変更を次回 saveData で確実に書き出す
   _prevDataSnapshot = JSON.parse(JSON.stringify(cloud));
-  try { localStorage.setItem(DB_KEY, JSON.stringify(cloud)); } catch(e) {}
+  _lastAppliedCloud = JSON.parse(JSON.stringify(cloud));
+  try { localStorage.setItem(DB_KEY, JSON.stringify(merged)); } catch(e) {}
   try { renderSidebarProjects && renderSidebarProjects(); } catch(e) {}
   try { if (state && state.view) navigate(state.view); } catch(e) {}
   try { updateCompanyNameHeader && updateCompanyNameHeader(); } catch(e) {}
@@ -6185,7 +6213,11 @@ function saveProject() {
       var t=data.tasks.find(function(t){return t.id===taskId;});
       if(t){ t.name=taskName; t.startDate=startDate; t.endDate=endDate; t.supervisor=supervisor; }
     } else {
-      data.tasks.push({id:genId('t'),projectId:pid,name:taskName,category:'',manager:'',supervisor:supervisor,startDate:startDate,endDate:endDate,progress:0,status:'pending',note:'',materialOrdered:false,workCompleted:false,completionNote:''});
+      // 新規タスク：必ず formTaskIds にも入れる（直後のフィルターで消されないように）
+      var newTid=genId('t');
+      formTaskIds.push(newTid);
+      row.dataset.taskId=newTid; // 同モーダル内で再保存しても新規扱いされないように
+      data.tasks.push({id:newTid,projectId:pid,name:taskName,category:'',manager:'',supervisor:supervisor,startDate:startDate,endDate:endDate,progress:0,status:'pending',note:'',materialOrdered:false,workCompleted:false,completionNote:''});
     }
   });
   // 編集時: フォームから削除されたタスクを除去
@@ -7053,6 +7085,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (!_dataSubscribed) {
         _dataSubscribed = true;
         _prevDataSnapshot = JSON.parse(JSON.stringify(data));
+        _lastAppliedCloud = JSON.parse(JSON.stringify(data));
         fbDb.ref('data').on('value', function(snap){
           var cloud = snap.val();
           if (cloud) {
