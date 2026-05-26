@@ -1738,7 +1738,11 @@ body.is-admin .admin-only { display:flex; }
     </div>
     <div class="modal-body">
       <div class="dr-meta">
-        <div><strong id="dr-date">--</strong> <span id="dr-dow" class="dr-muted"></span></div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <label for="dr-date-sel" style="font-weight:600">日付：</label>
+          <select id="dr-date-sel" class="dr-assignee-sel"></select>
+          <span id="dr-dow" class="dr-muted"></span>
+        </div>
         <div>担当：
           <select id="dr-assignee-sel" class="dr-assignee-sel">
             <option value="社長">社長</option>
@@ -5518,9 +5522,9 @@ function getReportTasks(assignee, dateStr) {
   });
 }
 
-function dailyReportTaskCardHtml(entry) {
+function dailyReportTaskCardHtml(entry, dateStr) {
   var t = entry.task, p = entry.project;
-  var today = todayStr();
+  var today = dateStr || todayStr();
   // 既存の保存内容（同タスク・同日）を復元
   var existing = (data.education||[]).find(function(e){ return e && e.taskId === t.id && e.date === today; });
   var status = (existing && existing.status) || t.status || 'pending';
@@ -5563,27 +5567,61 @@ function dailyReportTaskCardHtml(entry) {
   '</div>';
 }
 
-function openDailyReportModal(assignee, isReopen) {
+function openDailyReportModal(assignee, isReopen, dateStr) {
   var modal = qs('#modal-daily-report');
   var today = todayStr();
-  var dObj = new Date(today+'T00:00:00');
-  var dow = ['日','月','火','水','木','金','土'][dObj.getDay()];
-  qs('#dr-date').textContent = (dObj.getMonth()+1)+'月'+dObj.getDate()+'日';
-  qs('#dr-dow').textContent = '（'+dow+'）';
+  var pickedDate = dateStr;
+  if (!pickedDate) {
+    // 再オープン時は現在の日付セレクト値、新規オープン時は today
+    var existingSel = qs('#dr-date-sel');
+    pickedDate = (isReopen && existingSel && existingSel.value) ? existingSel.value : today;
+  }
+
   var sel = qs('#dr-assignee-sel');
   if (!isReopen) sel.value = assignee || '社長';
   var pickedAssignee = sel.value || assignee || '社長';
 
-  var entries = getReportTasks(pickedAssignee, today);
+  // ===== 日付セレクタ：過去14日分を選択肢に =====
+  var dateSel = qs('#dr-date-sel');
+  if (dateSel) {
+    var opts = '';
+    for (var i = 0; i < 14; i++) {
+      var ds = addDays(today, -i);
+      var dObj_i = new Date(ds+'T00:00:00');
+      var dow_i = ['日','月','火','水','木','金','土'][dObj_i.getDay()];
+      var entries_i = getReportTasks(pickedAssignee, ds);
+      var unreported_i = entries_i.filter(function(e){
+        return !(data.education||[]).some(function(x){ return x && x.taskId===e.task.id && x.date===ds; });
+      }).length;
+      var label = (i===0?'今日 ':(i===1?'前日 ':'')) + (dObj_i.getMonth()+1)+'/'+dObj_i.getDate()+'('+dow_i+')';
+      if (entries_i.length && unreported_i > 0) label += ' ⚠️未記入'+unreported_i+'件';
+      else if (entries_i.length)                label += ' ✓全件記入済';
+      else                                       label += ' (担当なし)';
+      opts += '<option value="'+ds+'"'+(ds===pickedDate?' selected':'')+'>'+label+'</option>';
+    }
+    dateSel.innerHTML = opts;
+    if (!dateSel.dataset.bound) {
+      dateSel.dataset.bound = '1';
+      dateSel.addEventListener('change', function(){
+        var curAssignee = (qs('#dr-assignee-sel').value) || '社長';
+        openDailyReportModal(curAssignee, true, dateSel.value);
+      });
+    }
+  }
+  var dObj = new Date(pickedDate+'T00:00:00');
+  var dowName = ['日','月','火','水','木','金','土'][dObj.getDay()];
+  qs('#dr-dow').textContent = '（'+dowName+'）' + (pickedDate===today?'':' ※過去日を記入中');
+
+  var entries = getReportTasks(pickedAssignee, pickedDate);
   var body = qs('#dr-body');
   if (!entries.length) {
-    body.innerHTML = '<div class="dr-empty">'+escHtml(pickedAssignee)+' さんの本日担当タスクはありません</div>';
+    body.innerHTML = '<div class="dr-empty">'+escHtml(pickedAssignee)+' さんの '+(pickedDate===today?'本日':pickedDate)+' 担当タスクはありません</div>';
   } else {
-    body.innerHTML = entries.map(dailyReportTaskCardHtml).join('');
+    body.innerHTML = entries.map(function(e){ return dailyReportTaskCardHtml(e, pickedDate); }).join('');
     // 既存報告の non-preset 作業員チップを復元
     body.querySelectorAll('.dr-task-card').forEach(function(card){
       var tid = card.dataset.tid;
-      var existing = (data.education||[]).find(function(e){ return e && e.taskId === tid && e.date === today; });
+      var existing = (data.education||[]).find(function(e){ return e && e.taskId === tid && e.date === pickedDate; });
       if (existing && Array.isArray(existing.workers)) {
         var chipsWrap = card.querySelector('.dr-worker-chips');
         existing.workers.forEach(function(w){
@@ -5689,7 +5727,9 @@ function saveDailyReport() {
   var assignee = qs('#dr-assignee-sel').value;
   var cards = qsa('#dr-body .dr-task-card');
   if (!cards.length) { toast('保存対象のタスクがありません','error'); return; }
-  var today = todayStr();
+  // 日付セレクタの値（未選択時は今日）
+  var dateSelEl = qs('#dr-date-sel');
+  var today = (dateSelEl && dateSelEl.value) ? dateSelEl.value : todayStr();
   var savedCount = 0;
   cards.forEach(function(card){
     var tid = card.dataset.tid;
