@@ -1291,6 +1291,7 @@ body.is-admin .admin-only { display:flex; }
       </div>
       <div class="schedule-toolbar">
         <div class="zoom-group" id="sched-mode-toggle">
+          <button class="zoom-btn" data-smode="gantt">ガント</button>
           <button class="zoom-btn active" data-smode="project">案件別</button>
           <button class="zoom-btn" data-smode="assignee">担当者別</button>
         </div>
@@ -5294,12 +5295,14 @@ function renderSchedule() {
   qsa('#sched-mode-toggle .zoom-btn').forEach(function(b){
     b.classList.toggle('active', b.dataset.smode === (state.schedMode||'project'));
   });
-  // 案件別モード時は担当者選択ドロップダウンを隠す
   var assigneeSel = qs('#sched-assignee-select');
-  if ((state.schedMode||'project') === 'assignee') {
+  var mode = state.schedMode || 'project';
+  if (mode === 'assignee') {
     return renderScheduleByAssignee();
-  } else {
-    if (assigneeSel) assigneeSel.style.display = 'none';
+  }
+  if (assigneeSel) assigneeSel.style.display = 'none';
+  if (mode === 'gantt') {
+    return renderScheduleGantt();
   }
   var range = schedGetRange();
   var days = buildDays(range.start, range.end);
@@ -5532,6 +5535,169 @@ function updateAssigneeSelectOptions() {
   sel.innerHTML = '<option value="">担当者を選択…</option>' + list.map(function(n){
     return '<option value="'+n.replace(/"/g,'&quot;')+'"'+(n===current?' selected':'')+'>'+n+'</option>';
   }).join('');
+}
+
+// 案件を縦に、日付を横に並べた横棒ガント表示
+function renderScheduleGantt() {
+  var range = schedGetRange();
+  var days = buildDays(range.start, range.end);
+  var cw = SCHED_CW[schedScale]; // 日あたり列幅
+  var today = todayStr();
+  var DOW = ['日','月','火','水','木','金','土'];
+
+  var archivedProjs = (data.archivedProjects||[]).slice().sort(function(a,b){
+    return (a.startDate||'')<(b.startDate||'')?-1:(a.startDate||'')>(b.startDate||'')?1:0;
+  }).map(function(p){ return Object.assign({}, p, {isArchived:true}); });
+  var activeProjs = (data.projects||[]).slice().sort(function(a,b){
+    return (a.startDate||'')<(b.startDate||'')?-1:(a.startDate||'')>(b.startDate||'')?1:0;
+  });
+  var sortedProjects = activeProjs.concat(archivedProjs);
+
+  var PROJ_W = 150;
+  var HDR_H = 44;
+  var ROW_H = 30;
+
+  var grid = qs('#sched-grid');
+  grid.innerHTML = '';
+  grid.style.cssText = 'display:block;min-width:max-content;';
+
+  // 月ヘッダー（年月）
+  var monthRow = document.createElement('div');
+  monthRow.style.cssText = 'position:sticky;top:0;z-index:25;display:flex;background:var(--bg-raised);border-bottom:1px solid var(--border-lt);';
+  var monthCorner = document.createElement('div');
+  monthCorner.style.cssText = 'position:sticky;left:0;z-index:26;width:'+PROJ_W+'px;background:var(--bg-raised);border-right:2px solid var(--border);box-sizing:border-box;'+
+    'display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:var(--text-muted);height:22px;';
+  monthCorner.textContent = '案件 / 日付';
+  monthRow.appendChild(monthCorner);
+  // group consecutive same-month
+  var monthGroups = [];
+  days.forEach(function(d){
+    var ym = d.substring(0,7);
+    var last = monthGroups[monthGroups.length-1];
+    if (last && last.ym === ym) last.count++;
+    else monthGroups.push({ym:ym, count:1});
+  });
+  monthGroups.forEach(function(g){
+    var cell = document.createElement('div');
+    cell.style.cssText = 'width:'+(cw*g.count)+'px;flex-shrink:0;border-right:1px solid #888;text-align:center;font-size:10px;font-weight:700;color:var(--text-sub);display:flex;align-items:center;justify-content:center;height:22px;background:var(--bg-hover);';
+    cell.textContent = g.ym.substring(0,4)+'/'+g.ym.substring(5);
+    monthRow.appendChild(cell);
+  });
+  grid.appendChild(monthRow);
+
+  // 日付ヘッダー
+  var hdr = document.createElement('div');
+  hdr.style.cssText = 'position:sticky;top:22px;z-index:20;display:flex;background:var(--bg-raised);border-bottom:2px solid var(--border);height:'+(HDR_H-22)+'px;';
+  var corner = document.createElement('div');
+  corner.style.cssText = 'position:sticky;left:0;z-index:21;width:'+PROJ_W+'px;background:var(--bg-raised);border-right:2px solid var(--border);box-sizing:border-box;';
+  hdr.appendChild(corner);
+  days.forEach(function(d){
+    var dObj = new Date(d+'T00:00:00');
+    var dow = DOW[dObj.getDay()];
+    var isToday = d === today;
+    var cell = document.createElement('div');
+    var bg = isToday ? '#fef3c7' : (dObj.getDay()===0?'#fff0f0':(dObj.getDay()===6?'#f0f6ff':''));
+    var color = dObj.getDay()===0 ? '#dc2626' : (dObj.getDay()===6 ? '#2563eb' : 'var(--text-sub)');
+    cell.style.cssText = 'width:'+cw+'px;flex-shrink:0;border-right:1px solid var(--border-lt);text-align:center;font-size:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;'+
+      'background:'+bg+';color:'+color+';'+(isToday?'font-weight:800;':'');
+    cell.innerHTML = '<div style="font-size:10px;line-height:1">'+dObj.getDate()+'</div><div style="font-size:8px;opacity:.7">'+dow+'</div>';
+    hdr.appendChild(cell);
+  });
+  grid.appendChild(hdr);
+
+  if (!sortedProjects.length) {
+    var empty = document.createElement('div');
+    empty.style.cssText = 'padding:32px;text-align:center;color:var(--text-muted);font-size:13px;';
+    empty.textContent = '案件がまだ登録されていません';
+    grid.appendChild(empty);
+    return;
+  }
+
+  // 日付 → インデックス索引
+  var dateIdx = {};
+  days.forEach(function(d,i){ dateIdx[d] = i; });
+
+  // 案件行
+  sortedProjects.forEach(function(proj){
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;height:'+ROW_H+'px;border-bottom:1px solid var(--border-lt);position:relative;'+(proj.isArchived?'opacity:.45;':'');
+    // 左固定セル：案件名
+    var nameCell = document.createElement('div');
+    nameCell.style.cssText = 'position:sticky;left:0;z-index:10;width:'+PROJ_W+'px;background:var(--bg-raised);border-right:2px solid var(--border);box-sizing:border-box;'+
+      'padding:0 8px;display:flex;align-items:center;gap:6px;flex-shrink:0;'+(proj.isArchived?'cursor:default;':'cursor:pointer;');
+    var dot = document.createElement('span');
+    dot.style.cssText = 'width:8px;height:8px;border-radius:50%;background:'+(proj.color||'#888')+';flex-shrink:0;';
+    var nameSpan = document.createElement('span');
+    nameSpan.style.cssText = 'font-size:11px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+    nameSpan.textContent = proj.name || '(無題)';
+    nameSpan.title = (proj.name||'') + (proj.client?' / '+proj.client:'');
+    nameCell.appendChild(dot);
+    nameCell.appendChild(nameSpan);
+    if (!proj.isArchived) {
+      nameCell.addEventListener('click', function(){
+        state.selectedProjectId = proj.id;
+        navigate('gantt');
+      });
+    }
+    row.appendChild(nameCell);
+
+    // 右側：日付セル群＋バーオーバーレイ
+    var daysWrap = document.createElement('div');
+    daysWrap.style.cssText = 'display:flex;position:relative;flex:1;';
+    days.forEach(function(d){
+      var dObj = new Date(d+'T00:00:00');
+      var isToday = d === today;
+      var bg = isToday ? 'rgba(254,243,199,.6)' : (dObj.getDay()===0?'rgba(254,226,226,.25)':(dObj.getDay()===6?'rgba(219,234,254,.25)':''));
+      var cell = document.createElement('div');
+      cell.style.cssText = 'width:'+cw+'px;flex-shrink:0;border-right:1px solid var(--border-lt);'+(bg?'background:'+bg+';':'');
+      daysWrap.appendChild(cell);
+    });
+
+    // バー
+    if (proj.startDate && proj.endDate) {
+      var clampedStart = proj.startDate < range.start ? range.start : proj.startDate;
+      var clampedEnd   = proj.endDate   > range.end   ? range.end   : proj.endDate;
+      var sIdx = dateIdx[clampedStart];
+      var eIdx = dateIdx[clampedEnd];
+      if (sIdx != null && eIdx != null && sIdx <= eIdx) {
+        var bar = document.createElement('div');
+        var left = sIdx * cw;
+        var width = (eIdx - sIdx + 1) * cw - 2;
+        var st = proj.status;
+        var barColor = proj.color || '#94a3b8';
+        if (st === 'completed') barColor = '#16a34a';
+        var isOverdue = proj.endDate < today && st !== 'completed' && !proj.isArchived;
+        if (isOverdue) barColor = '#dc2626';
+        var period = (proj.startDate||'').substring(5).replace('-','/') + '〜' + (proj.endDate||'').substring(5).replace('-','/');
+        bar.style.cssText = 'position:absolute;left:'+left+'px;width:'+width+'px;top:4px;bottom:4px;background:'+barColor+';'+
+          'border-radius:4px;display:flex;align-items:center;padding:0 6px;color:#fff;font-size:10px;font-weight:700;'+
+          'cursor:'+(proj.isArchived?'default':'pointer')+';box-shadow:0 1px 3px rgba(0,0,0,.25);'+
+          'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.3);';
+        bar.textContent = period + (cw >= 20 && (eIdx-sIdx+1) >= 8 ? '  / '+(proj.assignee||'') : '');
+        bar.title = (proj.name||'')+' / '+period+(proj.assignee?' / 担当:'+proj.assignee:'');
+        if (!proj.isArchived) {
+          bar.addEventListener('click', function(e){
+            e.stopPropagation();
+            state.selectedProjectId = proj.id;
+            navigate('gantt');
+          });
+        }
+        daysWrap.appendChild(bar);
+      }
+    }
+
+    row.appendChild(daysWrap);
+    grid.appendChild(row);
+  });
+
+  // 今日の位置にスクロール
+  setTimeout(function(){
+    var container = qs('.schedule-container');
+    if (container && dateIdx[today] != null) {
+      var targetLeft = PROJ_W + dateIdx[today] * cw - container.clientWidth/3;
+      container.scrollLeft = Math.max(0, targetLeft);
+    }
+  }, 50);
 }
 
 function renderScheduleByAssignee() {
