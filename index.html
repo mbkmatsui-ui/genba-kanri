@@ -76,6 +76,26 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
+/* 作業報告書 一覧ページ */
+#view-reports { padding: 0; display: flex; flex-direction: column; min-height: 0; }
+.reports-toolbar { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 16px 12px; border-bottom: 1px solid var(--border-lt); background: var(--bg-surface); }
+.reports-toolbar-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); }
+.reports-toolbar-item select { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); font-size: 13px; color: var(--text); font-family: inherit; }
+.reports-list { flex: 1; overflow-y: auto; padding: 8px 12px 24px; -webkit-overflow-scrolling: touch; }
+.reports-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border-lt); }
+.reports-row.is-today { background: #fef3c7; }
+.reports-row-date { min-width: 100px; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.reports-day-badge { font-size: 10px; font-weight: 700; color: #fff; background: #f59e0b; padding: 2px 7px; border-radius: 99px; }
+.reports-date-label { font-size: 13px; font-weight: 700; color: var(--text); }
+.reports-row-chips { flex: 1; display: flex; flex-wrap: wrap; gap: 6px; }
+.reports-chip { font-size: 12px; font-weight: 700; padding: 5px 10px; border-radius: 99px; border: 1.5px solid transparent; cursor: pointer; font-family: inherit; }
+.reports-chip.done { background: #dcfce7; color: #166534; border-color: #86efac; }
+.reports-chip.done:hover { background: #bbf7d0; }
+.reports-chip.miss { background: #fef3c7; color: #92400e; border-color: #fbbf24; animation: pulse-rpchip 1.8s ease-in-out infinite; }
+.reports-chip.miss:hover { background: #fde68a; }
+@keyframes pulse-rpchip { 0%,100% { box-shadow: 0 0 0 0 rgba(251,191,36,.0); } 50% { box-shadow: 0 0 0 4px rgba(251,191,36,.3); } }
+.reports-empty { text-align: center; padding: 32px 16px; color: var(--text-muted); font-size: 13px; }
+
 /* ダッシュボード：アプリアイコン風 角丸正方形ボタン */
 .dashboard-icon-actions { gap: 10px !important; }
 .dashboard-icon-btn { width: 72px; height: 72px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px 4px; border: none; border-radius: 18px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1.15; cursor: pointer; box-shadow: 0 3px 8px rgba(0,0,0,.18); transition: transform .12s, box-shadow .15s, filter .15s; flex-shrink: 0; font-family: inherit; text-align: center; -webkit-tap-highlight-color: transparent; }
@@ -1012,6 +1032,10 @@ body.is-admin .admin-only { display:flex; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M12 6v6l4 2"/></svg>
         完了履歴
       </a>
+      <a data-view="reports">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+        作業報告書
+      </a>
       <a data-view="mycal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h2m4 0h2M8 18h2m4 0h2"/></svg>
         マイカレンダー
@@ -1364,6 +1388,36 @@ body.is-admin .admin-only { display:flex; }
         <div id="history-year-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;padding-top:4px"></div>
         <div id="history-list"></div>
       </div>
+    </section>
+
+    <!-- 作業報告書 一覧 -->
+    <section id="view-reports" class="view">
+      <div class="page-header">
+        <div>
+          <h2>作業報告書</h2>
+          <div class="page-subtitle">日別 × 担当者ごとの記入状況。未記入の日はワンタップで記入画面へ</div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-primary btn-sm" id="btn-reports-today">📝 今日の報告書を書く</button>
+        </div>
+      </div>
+      <div class="reports-toolbar">
+        <label class="reports-toolbar-item">担当者：
+          <select id="reports-filter-assignee">
+            <option value="all">全員</option>
+            <option value="社長">社長</option>
+            <option value="汐海">汐海</option>
+          </select>
+        </label>
+        <label class="reports-toolbar-item">期間：
+          <select id="reports-filter-range">
+            <option value="14">過去 14 日</option>
+            <option value="30" selected>過去 30 日</option>
+            <option value="90">過去 90 日</option>
+          </select>
+        </label>
+      </div>
+      <div id="reports-list" class="reports-list"></div>
     </section>
 
     <!-- 編集履歴 -->
@@ -2549,6 +2603,7 @@ function navigate(view, pid) {
   if(view==='clients') renderClients();
   if(view==='schedule') renderSchedule();
   if(view==='history') renderHistory();
+  if(view==='reports') renderReports();
   if(view==='audit') renderAudit();
   if(view==='members') renderMembers();
   if(view==='mycal') renderMyCalendar();
@@ -3967,6 +4022,84 @@ function formatWorkerCounts(counts) {
     .sort(function(a,b){ return counts[b]-counts[a]; })
     .map(function(w){ return counts[w]>1 ? (w+'×'+counts[w]) : w; })
     .join('、');
+}
+
+// ===== 作業報告書 一覧 =====
+function renderReports() {
+  var listEl = qs('#reports-list');
+  if (!listEl) return;
+  var assigneeFilter = (qs('#reports-filter-assignee') || {}).value || 'all';
+  var days = parseInt((qs('#reports-filter-range') || {}).value || '30', 10);
+  var today = todayStr();
+
+  // 過去 days 日分の日付を新→旧で
+  var dates = [];
+  for (var i = 0; i < days; i++) dates.push(addDays(today, -i));
+
+  var ASSIGNEES = (assigneeFilter === 'all') ? ['社長', '汐海'] : [assigneeFilter];
+
+  function tasksForAssigneeOnDate(name, d) {
+    var pidsOfAssignee = {};
+    (data.projects || []).forEach(function(p){ if (p && p.assignee === name) pidsOfAssignee[p.id] = true; });
+    return (data.tasks || []).filter(function(t){
+      return t && pidsOfAssignee[t.projectId] && t.startDate && t.endDate
+        && t.startDate <= d && d <= t.endDate;
+    });
+  }
+  function reportedTaskIdsOnDate(d) {
+    var ids = {};
+    (data.education || []).forEach(function(e){ if (e && e.date === d) ids[e.taskId] = true; });
+    return ids;
+  }
+
+  var html = '';
+  dates.forEach(function(d){
+    var dObj = new Date(d + 'T00:00:00');
+    var dow = ['日','月','火','水','木','金','土'][dObj.getDay()];
+    var isToday = d === today;
+    var dateLabel = (dObj.getMonth()+1)+'/'+dObj.getDate()+'('+dow+')';
+    var reportedIds = reportedTaskIdsOnDate(d);
+
+    var perAssignee = ASSIGNEES.map(function(name){
+      var tasks = tasksForAssigneeOnDate(name, d);
+      if (!tasks.length) return null;
+      var done = tasks.filter(function(t){ return reportedIds[t.id]; }).length;
+      var miss = tasks.length - done;
+      return { name: name, total: tasks.length, done: done, miss: miss };
+    }).filter(Boolean);
+
+    if (!perAssignee.length) return; // この日は該当なし
+
+    var rowClass = 'reports-row' + (isToday ? ' is-today' : '');
+    var dayBadge = isToday ? '今日' : (d === addDays(today,-1) ? '昨日' : '');
+
+    var assigneeChips = perAssignee.map(function(a){
+      var cls = a.miss > 0 ? 'miss' : 'done';
+      var label = a.name + (a.miss > 0 ? ' ⚠'+a.miss+'/'+a.total : ' ✓'+a.total);
+      return '<button class="reports-chip '+cls+'" data-date="'+d+'" data-assignee="'+escHtml(a.name)+'">'+escHtml(label)+'</button>';
+    }).join('');
+
+    html += '<div class="'+rowClass+'">'+
+      '<div class="reports-row-date">'+
+        (dayBadge ? '<span class="reports-day-badge">'+dayBadge+'</span>' : '')+
+        '<span class="reports-date-label">'+dateLabel+'</span>'+
+      '</div>'+
+      '<div class="reports-row-chips">'+assigneeChips+'</div>'+
+    '</div>';
+  });
+
+  if (!html) {
+    html = '<div class="reports-empty">対象期間にタスクのある日がありません</div>';
+  }
+  listEl.innerHTML = html;
+
+  listEl.querySelectorAll('.reports-chip').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var d = btn.dataset.date;
+      var name = btn.dataset.assignee;
+      try { openDailyReportModal(name, false, d); } catch(e){ console.warn(e); }
+    });
+  });
 }
 
 function renderHistory() {
@@ -6569,6 +6702,17 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   var drSaveBtn = qs('#btn-save-daily-report');
   if (drSaveBtn) drSaveBtn.addEventListener('click', saveDailyReport);
+
+  // 作業報告書 一覧ページ
+  var rpToday = qs('#btn-reports-today');
+  if (rpToday) rpToday.addEventListener('click', function(){
+    var name = (currentUser && currentUser.email && (currentUser.email.toLowerCase().indexOf('shion') >= 0 || currentUser.email.toLowerCase().indexOf('shio') >= 0)) ? '汐海' : '社長';
+    openDailyReportModal(name, false, todayStr());
+  });
+  var rpAssignee = qs('#reports-filter-assignee');
+  var rpRange = qs('#reports-filter-range');
+  if (rpAssignee) rpAssignee.addEventListener('change', renderReports);
+  if (rpRange) rpRange.addEventListener('change', renderReports);
 
   // マイカレンダー
   var mcToday = qs('#mycal-today');
