@@ -77,7 +77,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
 /* 作業報告書 一覧ページ */
-#view-reports { padding: 0; display: flex; flex-direction: column; min-height: 0; }
+#view-reports { padding: 0; flex-direction: column; min-height: 0; }
+#view-reports.active { display: flex; }
 .reports-toolbar { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 16px 12px; border-bottom: 1px solid var(--border-lt); background: var(--bg-surface); }
 .reports-toolbar-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); }
 .reports-toolbar-item select { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); font-size: 13px; color: var(--text); font-family: inherit; }
