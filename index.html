@@ -81,6 +81,7 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .reports-toolbar { display: flex; gap: 12px; flex-wrap: wrap; padding: 8px 16px 12px; border-bottom: 1px solid var(--border-lt); background: var(--bg-surface); }
 .reports-toolbar-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sub); }
 .reports-toolbar-item select { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); font-size: 13px; color: var(--text); font-family: inherit; }
+.reports-toolbar-spacer { flex: 1; }
 .reports-list { flex: 1; overflow-y: auto; padding: 8px 12px 24px; -webkit-overflow-scrolling: touch; }
 .reports-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border-lt); }
 .reports-row.is-today { background: #fef3c7; }
@@ -1398,6 +1399,7 @@ body.is-admin .admin-only { display:flex; }
           <div class="page-subtitle">日別 × 担当者ごとの記入状況。未記入の日はワンタップで記入画面へ</div>
         </div>
         <div class="actions">
+          <button class="btn btn-ghost btn-sm" id="btn-reports-print">🖨 月毎に印刷</button>
           <button class="btn btn-primary btn-sm" id="btn-reports-today">📝 今日の報告書を書く</button>
         </div>
       </div>
@@ -1416,6 +1418,11 @@ body.is-admin .admin-only { display:flex; }
             <option value="90">過去 90 日</option>
           </select>
         </label>
+        <span class="reports-toolbar-spacer"></span>
+        <label class="reports-toolbar-item">印刷月：
+          <select id="reports-print-month"></select>
+        </label>
+        <button class="btn btn-ghost btn-sm" id="btn-print-reports">🖨 月別印刷</button>
       </div>
       <div id="reports-list" class="reports-list"></div>
     </section>
@@ -4025,7 +4032,201 @@ function formatWorkerCounts(counts) {
 }
 
 // ===== 作業報告書 一覧 =====
+function fillReportsMonthSelect() {
+  var sel = qs('#reports-print-month');
+  if (!sel || sel.options.length > 0) return;
+  var now = new Date();
+  for (var i = 0; i < 12; i++) {
+    var d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    var ym = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    var label = d.getFullYear() + '年 ' + (d.getMonth()+1) + '月';
+    var opt = document.createElement('option');
+    opt.value = ym; opt.textContent = label;
+    if (i === 0) opt.selected = true;
+    sel.appendChild(opt);
+  }
+}
+
+// ===== 作業報告書 月毎 印刷 =====
+function openReportsPrintDialog() {
+  var thisMonth = todayStr().substring(0, 7);
+  var input = prompt('印刷する月（YYYY-MM 形式）', thisMonth);
+  if (!input) return;
+  if (!/^\d{4}-\d{2}$/.test(input)) { alert('YYYY-MM 形式で入力してください（例 2026-05）'); return; }
+  printMonthlyReports(input);
+}
+
+function printMonthlyReports(yyyymm) {
+  var year = parseInt(yyyymm.substring(0,4), 10);
+  var monthIdx = parseInt(yyyymm.substring(5,7), 10) - 1;
+  var lastDay = new Date(year, monthIdx + 1, 0).getDate();
+  var startStr = yyyymm + '-01';
+  var endStr   = yyyymm + '-' + String(lastDay).padStart(2,'0');
+
+  var assigneeFilter = (qs('#reports-filter-assignee')||{}).value || 'all';
+
+  // active + archived 全案件を対象
+  var allProjects = (data.projects||[]).concat(data.archivedProjects||[]);
+  if (assigneeFilter !== 'all') {
+    allProjects = allProjects.filter(function(p){ return p && p.assignee === assigneeFilter; });
+  }
+
+  // 案件ごとに当月の記録を集計
+  var taskById = {}; (data.tasks||[]).forEach(function(t){ taskById[t.id] = t; });
+  var records = (data.education||[]).filter(function(e){
+    return e && e.date && e.date >= startStr && e.date <= endStr;
+  });
+  var recordsByPid = {};
+  records.forEach(function(e){
+    var t = taskById[e.taskId];
+    if (!t) return;
+    (recordsByPid[t.projectId] = recordsByPid[t.projectId] || []).push(e);
+  });
+
+  // 当月に記録がある案件のみ
+  var projectReports = [];
+  allProjects.forEach(function(p){
+    var recs = recordsByPid[p.id] || [];
+    if (!recs.length) return;
+    recs.sort(function(a,b){ return a.date.localeCompare(b.date); });
+    projectReports.push({ project: p, records: recs });
+  });
+
+  if (!projectReports.length) { alert('対象データがありません（'+yyyymm+'）'); return; }
+
+  // 開始日の早い順で並べる
+  projectReports.sort(function(a,b){ return a.records[0].date.localeCompare(b.records[0].date); });
+
+  // 3 件ずつページにまとめる
+  var blocksHtml = projectReports.map(function(rp, idx){
+    var block = buildProjectMonthlyBlock(rp.project, rp.records, yyyymm);
+    return block;
+  });
+  var pagesHtml = '';
+  for (var i = 0; i < blocksHtml.length; i += 3) {
+    var grp = blocksHtml.slice(i, i+3).join('');
+    pagesHtml += '<div class="rp-page">'+
+      '<div class="rp-page-head">'+yyyymm.replace('-','年')+'月 作業報告書' +
+        (assigneeFilter!=='all' ? '　／　担当：'+escHtml(assigneeFilter) : '')+
+        '<span class="rp-page-num">'+(Math.floor(i/3)+1)+' / '+Math.ceil(projectReports.length/3)+'</span>'+
+      '</div>'+
+      grp +
+    '</div>';
+  }
+
+  var titleStr = yyyymm.replace('-','年')+'月 作業報告書';
+  var w = window.open('', '_blank', 'width=900,height=1200');
+  if (!w) { alert('ポップアップがブロックされました。設定で許可してください'); return; }
+  w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'+
+    '<title>'+escHtml(titleStr)+'</title>'+
+    '<style>'+reportPrintCss()+'</style>'+
+    '</head><body>'+pagesHtml+
+    '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});</'+'script>'+
+    '</body></html>');
+  w.document.close();
+}
+
+function buildProjectMonthlyBlock(p, records, yyyymm) {
+  var taskById = {}; (data.tasks||[]).forEach(function(t){ taskById[t.id] = t; });
+  var DOW = ['日','月','火','水','木','金','土'];
+  var STATUS = { pending:'準備', active:'施行', done:'完了' };
+
+  // 日付ごとに集約
+  var byDate = {};
+  records.forEach(function(e){ (byDate[e.date] = byDate[e.date]||[]).push(e); });
+  var dates = Object.keys(byDate).sort();
+
+  var workerTotals = {};
+  records.forEach(function(e){
+    (e.workers||[]).forEach(function(w){ workerTotals[w] = (workerTotals[w]||0) + 1; });
+  });
+  var totalsHtml = Object.keys(workerTotals)
+    .sort(function(a,b){ return workerTotals[b] - workerTotals[a]; })
+    .map(function(w){ return escHtml(w) + (workerTotals[w]>1 ? '×'+workerTotals[w] : ''); })
+    .join('、');
+  var totalManDays = Object.keys(workerTotals).reduce(function(a,k){ return a + workerTotals[k]; }, 0);
+
+  // テーブル本体
+  var rowsHtml = '';
+  dates.forEach(function(ds){
+    var dObj = new Date(ds + 'T00:00:00');
+    var dCls = (dObj.getDay()===0) ? ' sun' : (dObj.getDay()===6 ? ' sat' : '');
+    var dLabel = (dObj.getMonth()+1)+'/'+dObj.getDate()+'<small>('+DOW[dObj.getDay()]+')</small>';
+    var entries = byDate[ds];
+    entries.forEach(function(e, idx){
+      var t = taskById[e.taskId] || {};
+      var stKey = (e.status || t.status || 'pending');
+      var status = STATUS[stKey] || stKey;
+      var wkLabel = (e.workers||[]).join('、') || ((e.count!=null) ? (e.count+'人') : '');
+      var noteHtml = e.progressNote ? '<div class="rp-note">'+escHtml(e.progressNote)+'</div>' : '';
+      rowsHtml += '<tr>';
+      if (idx===0) rowsHtml += '<td class="rp-date'+dCls+'" rowspan="'+entries.length+'">'+dLabel+'</td>';
+      rowsHtml += '<td class="rp-task">'+escHtml(t.name||'-')+'</td>'+
+                  '<td class="rp-status">'+escHtml(status)+'</td>'+
+                  '<td class="rp-workers">'+escHtml(wkLabel)+noteHtml+'</td>';
+      rowsHtml += '</tr>';
+    });
+  });
+
+  var period = '';
+  if (p.startDate || p.endDate) {
+    period = (p.startDate||'?').replace(/-/g,'/') + '〜' + (p.endDate||'?').replace(/-/g,'/');
+  }
+
+  return '<div class="rp-block">'+
+    '<div class="rp-block-head">'+
+      '<div class="rp-block-name">'+escHtml(p.name||'(無題)')+'</div>'+
+      '<div class="rp-block-meta">'+
+        (p.client ? '発注者：'+escHtml(p.client) : '')+
+        (p.assignee ? '　／　担当：'+escHtml(p.assignee) : '')+
+        (period ? '　／　工期：'+period : '')+
+      '</div>'+
+    '</div>'+
+    '<table class="rp-table">'+
+      '<colgroup><col style="width:54px"><col style="width:30%"><col style="width:42px"><col></colgroup>'+
+      '<thead><tr><th>日</th><th>作業内容</th><th>状況</th><th>作業員</th></tr></thead>'+
+      '<tbody>'+rowsHtml+'</tbody>'+
+    '</table>'+
+    '<div class="rp-block-foot">'+
+      '<span>稼働 '+dates.length+'日</span>'+
+      '<span>のべ '+totalManDays+'人</span>'+
+      '<span class="rp-block-totals">'+(totalsHtml || '記録なし')+'</span>'+
+    '</div>'+
+  '</div>';
+}
+
+function reportPrintCss() {
+  return '@media print { @page { size: A4 portrait; margin: 10mm; } body { margin: 0; } .rp-page { page-break-after: always; } .rp-page:last-child { page-break-after: auto; } }'+
+    'body { font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Hiragino Sans", "ヒラギノ角ゴ ProN", sans-serif; color: #1a1a1a; background: #fff; margin: 0; }'+
+    '.rp-page { padding: 8px 14px; max-width: 760px; margin: 0 auto; }'+
+    '.rp-page-head { display: flex; align-items: baseline; justify-content: space-between; border-bottom: 2px solid #1a1a1a; padding-bottom: 4px; margin-bottom: 8px; font-size: 16px; font-weight: 800; letter-spacing: .08em; }'+
+    '.rp-page-num { font-size: 10px; font-weight: 600; color: #666; }'+
+    /* 案件ブロック（1ページ3件想定） */
+    '.rp-block { border: 1.5px solid #1a1a1a; border-radius: 4px; padding: 6px 8px; margin-bottom: 7px; page-break-inside: avoid; }'+
+    '.rp-block-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding-bottom: 3px; border-bottom: 1px solid #999; margin-bottom: 4px; }'+
+    '.rp-block-name { font-size: 13px; font-weight: 800; letter-spacing: .03em; }'+
+    '.rp-block-meta { font-size: 10px; color: #444; }'+
+    /* テーブル */
+    '.rp-table { width: 100%; border-collapse: collapse; font-size: 10px; table-layout: fixed; }'+
+    '.rp-table th, .rp-table td { border: 1px solid #999; padding: 2px 4px; vertical-align: top; word-wrap: break-word; }'+
+    '.rp-table th { background: #ececec; font-weight: 700; font-size: 9px; text-align: center; }'+
+    '.rp-date { white-space: nowrap; text-align: center; font-weight: 700; background: #fafafa; font-size: 10px; }'+
+    '.rp-date small { display: inline; font-weight: 400; color: #666; font-size: 9px; margin-left: 2px; }'+
+    '.rp-date.sun { color: #c00; background: #fff0f0; }'+
+    '.rp-date.sat { color: #06c; background: #f0f6ff; }'+
+    '.rp-status { text-align: center; }'+
+    '.rp-workers { font-size: 9px; line-height: 1.35; }'+
+    '.rp-note { font-size: 9px; color: #444; margin-top: 2px; padding-top: 2px; border-top: 1px dotted #bbb; }'+
+    /* ブロックフッター */
+    '.rp-block-foot { display: flex; flex-wrap: wrap; gap: 10px; padding-top: 4px; margin-top: 3px; border-top: 1px dashed #999; font-size: 10px; align-items: baseline; }'+
+    '.rp-block-foot span { font-weight: 600; }'+
+    '.rp-block-totals { color: #333; font-weight: 500; flex: 1; min-width: 200px; }'+
+    /* 旧スタイル（後方互換、未使用） */
+    '.rp-foot-row.block .rp-foot-value { display: block; margin-top: 4px; font-weight: 600; line-height: 1.6; }';
+}
+
 function renderReports() {
+  fillReportsMonthSelect();
   var listEl = qs('#reports-list');
   if (!listEl) return;
   var assigneeFilter = (qs('#reports-filter-assignee') || {}).value || 'all';
@@ -4100,6 +4301,135 @@ function renderReports() {
       try { openDailyReportModal(name, false, d); } catch(e){ console.warn(e); }
     });
   });
+}
+
+// 月別作業報告書の印刷
+function printMonthlyReports(yearMonth, assigneeFilter) {
+  assigneeFilter = assigneeFilter || 'all';
+  if (!yearMonth || !/^\d{4}-\d{2}$/.test(yearMonth)) {
+    toast('印刷月を選択してください','error'); return;
+  }
+  var yr = parseInt(yearMonth.substring(0,4),10);
+  var mo = parseInt(yearMonth.substring(5,7),10);
+  var firstDay = yearMonth + '-01';
+  var lastDate = new Date(yr, mo, 0).getDate();
+  var lastDay = yearMonth + '-' + String(lastDate).padStart(2,'0');
+  var ASSIGNEES = (assigneeFilter === 'all') ? ['社長','汐海'] : [assigneeFilter];
+
+  // 集計：作業員 × 出勤日数（同名同日は 1 と数える）
+  var workerCount = {}; // worker name → count
+  var totalTaskReports = 0;
+
+  function statusLabel(s) {
+    return s==='done' ? '完了' : (s==='active' ? '施行中' : (s==='pending' ? '準備中' : '－'));
+  }
+
+  // 日別 × 担当者 × タスク のセクション
+  var dayBlocks = '';
+  var hasAny = false;
+  for (var day = 1; day <= lastDate; day++) {
+    var d = yearMonth + '-' + String(day).padStart(2,'0');
+    var dObj = new Date(d + 'T00:00:00');
+    var dow = ['日','月','火','水','木','金','土'][dObj.getDay()];
+    var assigneeHtmls = [];
+    ASSIGNEES.forEach(function(name){
+      var pidsOfAssignee = {};
+      (data.projects||[]).forEach(function(p){ if (p && p.assignee === name) pidsOfAssignee[p.id] = true; });
+      // その日に担当の進行中タスクのうち、報告書（education レコード）が存在するもの
+      var taskRows = '';
+      var anyRow = false;
+      (data.tasks||[]).forEach(function(t){
+        if (!t || !pidsOfAssignee[t.projectId]) return;
+        if (!t.startDate || !t.endDate) return;
+        if (t.startDate > d || d > t.endDate) return;
+        var rec = (data.education||[]).find(function(e){ return e && e.taskId===t.id && e.date===d; });
+        if (!rec) return; // 未記入はスキップ
+        anyRow = true; hasAny = true; totalTaskReports++;
+        var proj = (data.projects||[]).find(function(p){ return p.id === t.projectId; }) || {};
+        var workers = Array.isArray(rec.workers) ? rec.workers : [];
+        workers.forEach(function(w){
+          if (!w) return;
+          workerCount[w] = (workerCount[w]||0) + 1;
+        });
+        var workersLabel = workers.length ? workers.join('、') : '－';
+        var st = rec.status ? statusLabel(rec.status) : statusLabel(t.status);
+        var note = rec.progressNote || '';
+        taskRows += '<tr>'+
+          '<td class="pr-task">'+escHtml(t.name||'')+'<div class="pr-proj">'+escHtml(proj.name||'')+(proj.client?' / '+escHtml(proj.client):'')+'</div></td>'+
+          '<td class="pr-status">'+st+'</td>'+
+          '<td class="pr-workers"><span class="pr-cnt">'+workers.length+'人</span> '+escHtml(workersLabel)+'</td>'+
+          '<td class="pr-note">'+escHtml(note)+'</td>'+
+        '</tr>';
+      });
+      if (anyRow) {
+        assigneeHtmls.push(
+          '<div class="pr-asn"><div class="pr-asn-h">担当：'+escHtml(name)+'</div>'+
+          '<table class="pr-tbl"><thead><tr><th>タスク</th><th>状態</th><th>作業員</th><th>進行</th></tr></thead>'+
+          '<tbody>'+taskRows+'</tbody></table></div>'
+        );
+      }
+    });
+    if (assigneeHtmls.length) {
+      dayBlocks += '<div class="pr-day"><div class="pr-day-h">'+yr+'年'+mo+'月'+day+'日（'+dow+'）</div>'+assigneeHtmls.join('')+'</div>';
+    }
+  }
+
+  // 月間サマリー：作業員 × 出勤日数
+  var summaryRows = '';
+  var wkKeys = Object.keys(workerCount).sort(function(a,b){ return workerCount[b]-workerCount[a]; });
+  if (wkKeys.length === 0) {
+    summaryRows = '<tr><td colspan="2" style="text-align:center;color:#888">記録なし</td></tr>';
+  } else {
+    summaryRows = wkKeys.map(function(w){
+      return '<tr><td>'+escHtml(w)+'</td><td style="text-align:center;font-weight:bold">'+workerCount[w]+'</td></tr>';
+    }).join('');
+  }
+  var companyName = (data.settings && data.settings.companyName) || '';
+
+  var css = '@page { size: A4; margin: 14mm; }'+
+    'body { font-family: -apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",Meiryo,sans-serif; color:#1a1a1a; font-size: 11pt; }'+
+    '.pr-head { display:flex; align-items:baseline; justify-content:space-between; border-bottom:2px solid #333; padding-bottom:8px; margin-bottom:14px; }'+
+    '.pr-title { font-size: 18pt; font-weight: 700; }'+
+    '.pr-meta { font-size: 10pt; color:#555; text-align:right; }'+
+    '.pr-summary { background:#f5f5f5; padding:10px 12px; border-radius:6px; margin-bottom:18px; }'+
+    '.pr-summary h3 { font-size: 12pt; margin-bottom:6px; }'+
+    '.pr-summary-tbl { width:100%; border-collapse: collapse; font-size: 10pt; }'+
+    '.pr-summary-tbl th, .pr-summary-tbl td { border:1px solid #ccc; padding:4px 8px; }'+
+    '.pr-summary-tbl th { background:#e5e5e5; font-weight:700; }'+
+    '.pr-day { margin-bottom: 12px; page-break-inside: avoid; }'+
+    '.pr-day-h { background:#333; color:#fff; padding:5px 10px; font-weight:700; font-size:11pt; border-radius:4px 4px 0 0; }'+
+    '.pr-asn { border:1px solid #ccc; border-top:none; padding: 6px 8px; }'+
+    '.pr-asn:last-child { border-radius: 0 0 4px 4px; }'+
+    '.pr-asn-h { font-size: 10pt; font-weight: 700; color:#444; margin-bottom: 4px; }'+
+    '.pr-tbl { width:100%; border-collapse: collapse; font-size: 10pt; }'+
+    '.pr-tbl th, .pr-tbl td { border:1px solid #d0d0d0; padding:4px 6px; vertical-align: top; }'+
+    '.pr-tbl th { background:#eee; font-weight:700; text-align:left; }'+
+    '.pr-task { width: 28%; }'+
+    '.pr-proj { font-size: 8.5pt; color:#666; margin-top:2px; }'+
+    '.pr-status { width: 10%; text-align:center; }'+
+    '.pr-workers { width: 38%; }'+
+    '.pr-cnt { display:inline-block; background:#333; color:#fff; padding:1px 6px; border-radius:99px; font-size:8.5pt; margin-right:4px; font-weight:700; }'+
+    '.pr-note { width: 24%; font-size: 9pt; }'+
+    '.pr-empty { text-align:center; padding: 40px; color:#888; font-size: 11pt; }';
+
+  var html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+yr+'年'+mo+'月 作業報告書</title><style>'+css+'</style></head><body>'+
+    '<div class="pr-head">'+
+      '<div><div class="pr-title">'+yr+'年'+mo+'月 作業報告書</div>'+
+      '<div style="font-size:10pt;color:#666;margin-top:4px">期間：'+firstDay.replace(/-/g,'/')+' 〜 '+lastDay.replace(/-/g,'/')+'　／　担当：'+(assigneeFilter==='all'?'全員':assigneeFilter)+'</div></div>'+
+      '<div class="pr-meta">'+escHtml(companyName)+'<br>発行：'+new Date().toLocaleString('ja-JP',{year:'numeric',month:'2-digit',day:'2-digit'})+'</div>'+
+    '</div>'+
+    '<div class="pr-summary"><h3>月間サマリー</h3>'+
+      '<div style="font-size:10pt;color:#444;margin-bottom:6px">記入済タスク報告書：<strong>'+totalTaskReports+'</strong>件 ／ 作業員のべ出勤：<strong>'+wkKeys.reduce(function(s,k){return s+workerCount[k];},0)+'</strong>人日</div>'+
+      '<table class="pr-summary-tbl"><thead><tr><th>作業員</th><th style="width:80px">出勤日数</th></tr></thead><tbody>'+summaryRows+'</tbody></table>'+
+    '</div>'+
+    (hasAny ? dayBlocks : '<div class="pr-empty">この月の作業報告書はありません</div>')+
+    '<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>'+
+    '</body></html>';
+
+  var w = window.open('', '_blank');
+  if (!w) { toast('ポップアップがブロックされました。許可してください','error'); return; }
+  w.document.write(html);
+  w.document.close();
 }
 
 function renderHistory() {
@@ -6709,10 +7039,18 @@ document.addEventListener('DOMContentLoaded', function(){
     var name = (currentUser && currentUser.email && (currentUser.email.toLowerCase().indexOf('shion') >= 0 || currentUser.email.toLowerCase().indexOf('shio') >= 0)) ? '汐海' : '社長';
     openDailyReportModal(name, false, todayStr());
   });
+  var rpPrint = qs('#btn-reports-print');
+  if (rpPrint) rpPrint.addEventListener('click', openReportsPrintDialog);
   var rpAssignee = qs('#reports-filter-assignee');
   var rpRange = qs('#reports-filter-range');
   if (rpAssignee) rpAssignee.addEventListener('change', renderReports);
   if (rpRange) rpRange.addEventListener('change', renderReports);
+  var rpPrint = qs('#btn-print-reports');
+  if (rpPrint) rpPrint.addEventListener('click', function(){
+    var ym = (qs('#reports-print-month')||{}).value;
+    var asn = (qs('#reports-filter-assignee')||{}).value || 'all';
+    printMonthlyReports(ym, asn);
+  });
 
   // マイカレンダー
   var mcToday = qs('#mycal-today');
