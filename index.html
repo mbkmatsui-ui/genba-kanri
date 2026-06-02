@@ -1984,10 +1984,41 @@ try { fbDb.ref('.info/connected').on('value', function(s){
   var bn = document.getElementById('offline-banner');
   if (bn) bn.classList.toggle('show', on === false);
   if (typeof setSyncStatus === 'function') {
+    var wasOffline = _isOffline;
     _isOffline = (on === false);
     setSyncStatus(_pendingWrites > 0 ? 'pending' : 'synced');
+    // オフライン→オンライン復帰時：強制再フェッチで多端末の最新差分を取り込む
+    if (wasOffline && !_isOffline && typeof forceSyncFromCloud === 'function') {
+      try { logSave && logSave('reconnect', true, 'online 復帰 → 再同期'); } catch(e){}
+      setTimeout(function(){ try { forceSyncFromCloud(); } catch(e){} }, 500);
+    }
   }
 }); } catch(e) {}
+
+// PWA を前面に戻したとき / タブに戻ったときに強制再フェッチ
+// （iPhone PWA は背面で suspend されることがあり、復帰時に最新を取り直す）
+function _onAppForeground() {
+  if (!currentUser) return;
+  try { logSave && logSave('foreground', true, 'visibility → 再同期'); } catch(e){}
+  try { if (typeof forceSyncFromCloud === 'function') forceSyncFromCloud(); } catch(e){}
+}
+try {
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState === 'visible') _onAppForeground();
+  });
+  window.addEventListener('focus', _onAppForeground);
+  window.addEventListener('pageshow', function(e){ if (e.persisted) _onAppForeground(); });
+} catch(e) {}
+
+// 30 秒以上 pending が残っていたら警告
+setInterval(function(){
+  if (_pendingWrites > 0 && _lastSyncedAt) {
+    var ageMs = Date.now() - _lastSyncedAt;
+    if (ageMs > 30000) {
+      try { logSave && logSave('stuck', false, _pendingWrites+' 件 が '+Math.round(ageMs/1000)+' 秒滞留'); } catch(e){}
+    }
+  }
+}, 15000);
 
 var currentUser = null;        // ログイン中のユーザー
 var _suppressAuditNext = false; // 自動同期で更新したときは監査ログを生成しない
