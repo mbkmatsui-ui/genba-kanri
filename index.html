@@ -3209,20 +3209,21 @@ function renderMaterialAlert() {
       } else if (action === 'open-report') {
         // 「📝 作業報告書 未提出」タップ → 該当タスクの担当者・日付で報告書を開く
         var proj = data.projects.find(function(pr){ return pr.id === task.projectId; }) || {};
-        var assignee = proj.assignee || '社長';
-        // 未提出が最も古い日付を探す（task の startDate〜endDate 範囲で記録なしの日）
+        var assignee = proj.assignee || task.supervisor || task.assignee || '社長';
         var today = todayStr();
         var pickedDate = today;
         if (task.startDate && task.endDate) {
           var startD = task.startDate;
           var endD = task.endDate < today ? task.endDate : today;
-          // 範囲内で最初の未記入日を選ぶ
+          // 範囲内で最初の未記入日を選ぶ。全件記入済みなら最終日（編集可能）
+          var firstUnreported = null;
           var d = startD;
           while (d <= endD) {
             var rec = (data.education||[]).find(function(e){ return e && e.taskId===task.id && e.date===d; });
-            if (!rec) { pickedDate = d; break; }
+            if (!rec) { firstUnreported = d; break; }
             d = addDays(d, 1);
           }
+          pickedDate = firstUnreported || endD;
         }
         try { openDailyReportModal(assignee, false, pickedDate); } catch(e){ console.warn(e); }
       }
@@ -6193,12 +6194,26 @@ function openDailyReportModal(assignee, isReopen, dateStr) {
   if (!isReopen) sel.value = assignee || '社長';
   var pickedAssignee = sel.value || assignee || '社長';
 
-  // ===== 日付セレクタ：過去14日分を選択肢に =====
+  // ===== 日付セレクタ：過去14日分を選択肢に。pickedDate が範囲外なら追加 =====
   var dateSel = qs('#dr-date-sel');
   if (dateSel) {
     var opts = '';
+    var includedDates = {};
+    // pickedDate が 14日以上前 or 未来日なら、先頭に特別オプションとして追加
+    if (pickedDate && pickedDate !== today) {
+      var diff = Math.round((new Date(today+'T00:00:00') - new Date(pickedDate+'T00:00:00'))/86400000);
+      if (diff > 13 || diff < 0) {
+        var pDObj = new Date(pickedDate+'T00:00:00');
+        var pDow = ['日','月','火','水','木','金','土'][pDObj.getDay()];
+        opts += '<option value="'+pickedDate+'" selected>'+
+          pickedDate.replace(/-/g,'/')+' ('+pDow+') ⚠ 選択中</option>';
+        includedDates[pickedDate] = true;
+      }
+    }
     for (var i = 0; i < 14; i++) {
       var ds = addDays(today, -i);
+      if (includedDates[ds]) continue;
+      includedDates[ds] = true;
       var dObj_i = new Date(ds+'T00:00:00');
       var dow_i = ['日','月','火','水','木','金','土'][dObj_i.getDay()];
       var entries_i = getReportTasks(pickedAssignee, ds);
