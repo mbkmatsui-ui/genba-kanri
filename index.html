@@ -76,6 +76,10 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
+/* 作業報告書 印刷日付ピッカー */
+.reports-date-input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); font-size: 13px; color: var(--text); font-family: inherit; min-width: 130px; }
+.reports-date-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-dim); }
+
 /* 作業報告書 一覧ページ */
 #view-reports { padding: 0; flex-direction: column; min-height: 0; }
 #view-reports.active { display: flex; }
@@ -1400,8 +1404,9 @@ body.is-admin .admin-only { display:flex; }
           <h2>作業報告書</h2>
           <div class="page-subtitle">日別 × 担当者ごとの記入状況。未記入の日はワンタップで記入画面へ</div>
         </div>
-        <div class="actions">
-          <button class="btn btn-ghost btn-sm" id="btn-reports-print">🖨 1日毎に印刷</button>
+        <div class="actions" style="flex-wrap:wrap;gap:6px">
+          <input type="date" id="reports-print-date" class="reports-date-input" />
+          <button class="btn btn-ghost btn-sm" id="btn-reports-print">🖨 印刷</button>
           <button class="btn btn-primary btn-sm" id="btn-reports-today">📝 今日の報告書を書く</button>
         </div>
       </div>
@@ -4030,11 +4035,15 @@ function formatWorkerCounts(counts) {
 
 // ===== 作業報告書 1日毎 印刷 =====
 function openReportsPrintDialog() {
-  var t = todayStr();
-  var input = prompt('印刷する日付（YYYY-MM-DD 形式）', t);
-  if (!input) return;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) { alert('YYYY-MM-DD 形式で入力してください（例 2026-05-31）'); return; }
-  printDailyReport(input);
+  var dateInput = qs('#reports-print-date');
+  var d = dateInput ? dateInput.value : '';
+  if (!d) {
+    // 日付未指定なら今日
+    d = todayStr();
+    if (dateInput) dateInput.value = d;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { alert('日付を選んでください'); return; }
+  printDailyReport(d);
 }
 
 function printDailyReport(dateStr) {
@@ -4176,6 +4185,9 @@ function dailyReportPrintCss() {
 // 1日毎印刷に置き換えのため削除。
 
 function renderReports() {
+  // 印刷日付の初期値を今日に
+  var dateInput = qs('#reports-print-date');
+  if (dateInput && !dateInput.value) dateInput.value = todayStr();
   var listEl = qs('#reports-list');
   if (!listEl) return;
   var assigneeFilter = (qs('#reports-filter-assignee') || {}).value || 'all';
