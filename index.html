@@ -428,7 +428,9 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .mal-complete-btn:active { background:#fee2e2; }
 /* 旧 overdue 用ボタン・コメントスタイル類は削除（作業報告書に統合） */
 /* 作業報告書 未提出 表示 */
-.mal-report-missing { font-size: 11px; font-weight: 700; color: #b91c1c; margin-top: 4px; }
+.mal-report-missing { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #b91c1c; margin-top: 4px; background: #fff; border: 1.5px solid #fca5a5; border-radius: 6px; padding: 3px 8px; cursor: pointer; font-family: inherit; transition: background .15s, border-color .15s; }
+.mal-report-missing:hover { background: #fee2e2; border-color: #ef4444; }
+.mal-report-missing:active { background: #fecaca; }
 
 /* ===== カレンダー日付ピッカー ===== */
 .dp-trigger { display:flex; align-items:center; gap:8px; padding:8px 12px; border:1px solid var(--border); border-radius:var(--radius); cursor:pointer; font-size:14px; background:var(--bg-raised); user-select:none; }
@@ -3119,7 +3121,7 @@ function renderMaterialAlert() {
       actionHtml = '<button class="mal-complete-btn" data-action="complete" data-tid="' + escHtml(t.id) + '">施工完了</button>';
     } else if (s === 'overdue') {
       badgeText = '+' + daysOverdue + '日超過';
-      subText = '<div class="mal-report-missing">📝 作業報告書 未提出</div>';
+      subText = '<button class="mal-report-missing" data-action="open-report" data-tid="' + escHtml(t.id) + '" title="タップで作業報告書を開く">📝 作業報告書 未提出 ▸</button>';
       actionHtml = '<button class="mal-complete-btn" data-action="complete" data-tid="' + escHtml(t.id) + '">施工完了</button>';
     }
 
@@ -3204,6 +3206,25 @@ function renderMaterialAlert() {
           renderMaterialAlert();
           renderDashboard();
         });
+      } else if (action === 'open-report') {
+        // 「📝 作業報告書 未提出」タップ → 該当タスクの担当者・日付で報告書を開く
+        var proj = data.projects.find(function(pr){ return pr.id === task.projectId; }) || {};
+        var assignee = proj.assignee || '社長';
+        // 未提出が最も古い日付を探す（task の startDate〜endDate 範囲で記録なしの日）
+        var today = todayStr();
+        var pickedDate = today;
+        if (task.startDate && task.endDate) {
+          var startD = task.startDate;
+          var endD = task.endDate < today ? task.endDate : today;
+          // 範囲内で最初の未記入日を選ぶ
+          var d = startD;
+          while (d <= endD) {
+            var rec = (data.education||[]).find(function(e){ return e && e.taskId===task.id && e.date===d; });
+            if (!rec) { pickedDate = d; break; }
+            d = addDays(d, 1);
+          }
+        }
+        try { openDailyReportModal(assignee, false, pickedDate); } catch(e){ console.warn(e); }
       }
     });
   });
