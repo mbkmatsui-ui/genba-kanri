@@ -76,6 +76,16 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
+/* 同期ログ */
+.sync-log-list { display: flex; flex-direction: column; gap: 4px; }
+.sync-log-item { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px; background: var(--bg-raised); border-left: 3px solid var(--border); }
+.sync-log-item.ok { border-left-color: #3a9e68; }
+.sync-log-item.ng { border-left-color: #dc2626; background: #fef2f2; }
+.sync-log-time { color: var(--text-muted); font-size: 11px; min-width: 70px; }
+.sync-log-type { font-weight: 700; min-width: 70px; }
+.sync-log-msg { flex: 1; color: var(--text-sub); }
+.sync-log-empty { text-align: center; padding: 18px; color: var(--text-muted); font-size: 12px; }
+
 /* 作業報告書 印刷日付ピッカー */
 .reports-date-input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-raised); font-size: 13px; color: var(--text); font-family: inherit; min-width: 130px; }
 .reports-date-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-dim); }
@@ -1001,7 +1011,7 @@ body.is-admin .admin-only { display:flex; }
   <div id="header-view-label" style="display:none"></div>
   <div class="header-spacer"></div>
   <div class="user-info" id="user-info" style="display:none">
-    <button class="sync-status" id="sync-status-btn" title="クリックでクラウドから最新データを取得">
+    <button class="sync-status" id="sync-status-btn" title="クリックで同期状況を確認">
       <span class="sync-icon" id="sync-icon">✓</span>
       <span class="sync-text" id="sync-text">同期済</span>
     </button>
@@ -1795,6 +1805,25 @@ body.is-admin .admin-only { display:flex; }
 </div>
 
 <!-- 作業報告書（雛形・サンプル） -->
+<!-- 同期状況の診断パネル -->
+<div class="modal-overlay hidden" id="modal-sync-log">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <h3>同期ステータス</h3>
+      <button class="modal-close">×</button>
+    </div>
+    <div class="modal-body" style="max-height:70vh;overflow:auto">
+      <div id="sync-log-summary" style="padding:10px 14px;background:var(--bg-hover);border-radius:8px;margin-bottom:12px;font-size:13px;line-height:1.7"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--text-muted);letter-spacing:.06em;padding:4px 6px;margin-bottom:6px">直近の保存履歴（最新 30 件）</div>
+      <div id="sync-log-list" class="sync-log-list"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btn-sync-close">閉じる</button>
+      <button class="btn btn-primary" id="btn-force-resync">⟳ クラウドから再取得</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="modal-daily-report">
   <div class="modal" style="max-width:760px">
     <div class="modal-header">
@@ -2121,16 +2150,29 @@ function updateCapacityBanner(sizeMB, level) {
   }
 }
 
+// 保存キュー：トランザクションを直列化して競合を防ぐ
+var _saveQueue = Promise.resolve();
+// 診断ログ（直近 30 件）
+var _saveLog = [];
+function logSave(type, ok, msg) {
+  _saveLog.unshift({ ts: Date.now(), type: type, ok: ok, msg: msg || '' });
+  if (_saveLog.length > 30) _saveLog.pop();
+  try { updateSyncLogPanel(); } catch(e) {}
+}
+
 function saveData(d) {
   // ローカル保存（オフラインでも即座に反映）
-  try { localStorage.setItem(DB_KEY, JSON.stringify(d)); } catch(e) {}
+  try {
+    localStorage.setItem(DB_KEY, JSON.stringify(d));
+  } catch(e) {
+    logSave('localStorage', false, (e && e.name === 'QuotaExceededError') ? 'quota超過' : (e.message||''));
+  }
 
   // 監査ログ計算（自動同期で書き換えた直後はスキップ）
   if (!_suppressAuditNext && currentUser && _prevDataSnapshot) {
     try {
       var changes = computeAuditChanges(_prevDataSnapshot, d);
       if (changes.length > 0) {
-        // 一括書き込み
         var updates = {};
         changes.forEach(function(c){
           var key = fbDb.ref('audit_logs').push().key;
@@ -2142,58 +2184,72 @@ function saveData(d) {
   }
   _suppressAuditNext = false;
 
-  // 容量チェック
   try { checkCapacityAndWarn(d); } catch(e) {}
 
-  // Firebase に書き込み（ログイン中のみ、transaction で他端末の変更を吸収）
-  if (currentUser) {
-    setSyncStatus('pending');
-    _pendingWrites = (_pendingWrites||0) + 1;
-    // この保存時点での「前回同期スナップショット」をキャプチャ（後続の保存と独立）
-    var localPrev = _prevDataSnapshot ? JSON.parse(JSON.stringify(_prevDataSnapshot)) : null;
-    // 監査ログ用のベースラインは即時に更新（次回保存時に正しく差分が取れるよう）
-    _prevDataSnapshot = JSON.parse(JSON.stringify(d));
+  if (!currentUser) return;
 
-    fbDb.ref('data').transaction(function(currentCloud) {
-      // クラウドが空：初回保存はローカルをそのまま書く
-      if (currentCloud == null) return d;
-      // クラウドが何もない（オブジェクト化前）でも安全に扱う
-      try { ensureDataDefaults(currentCloud); } catch(e) {}
-      if (!localPrev) {
-        // ベースラインが無いケース（初期化未完了）：自分の値で上書き（旧挙動）
-        return d;
-      }
-      var delta = computeDataDelta(localPrev, d);
-      return applyDelta(currentCloud, delta);
-    }, function(err, committed, snap) {
-      _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
-      _lastSyncedAt = Date.now();
-      if (err) {
-        setSyncStatus('error');
-        console.error('cloud save failed:', err);
-        if (typeof toast === 'function') {
-          var msg = (err && err.message) ? err.message : '';
-          if (msg.toLowerCase().indexOf('size') >= 0 || msg.indexOf('large') >= 0) {
-            toast('データが大きすぎてクラウド保存できません。古い写真を削除してください', 'error');
-          } else if (err && err.code === 'PERMISSION_DENIED') {
-            toast('保存権限がありません', 'error');
+  setSyncStatus('pending');
+  _pendingWrites = (_pendingWrites||0) + 1;
+  // スナップショットは saveData 呼び出し時の data を捕捉（後続の mutation の影響を受けない）
+  var snapshot = JSON.parse(JSON.stringify(d));
+  var enqueueTime = Date.now();
+  logSave('enqueue', true, 'pending '+_pendingWrites);
+
+  // キューに繋げて直列実行（前の transaction が完了するまで次は始まらない）
+  _saveQueue = _saveQueue.then(function(){
+    return new Promise(function(resolve){
+      // ベースラインは queue 実行時点の _prev を採用
+      // （直前の save の commit 後に _prev が更新されているのでこれが「クラウドが持っている確定値」）
+      var localPrev = _prevDataSnapshot ? JSON.parse(JSON.stringify(_prevDataSnapshot)) : null;
+      fbDb.ref('data').transaction(function(currentCloud) {
+        if (currentCloud == null) return snapshot;
+        try { ensureDataDefaults(currentCloud); } catch(e) {}
+        if (!localPrev) return snapshot;
+        var delta = computeDataDelta(localPrev, snapshot);
+        return applyDelta(currentCloud, delta);
+      }, function(err, committed, snap) {
+        _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
+        _lastSyncedAt = Date.now();
+        var elapsedSec = Math.round((_lastSyncedAt - enqueueTime)/100)/10;
+        if (err) {
+          setSyncStatus('error');
+          var msg = (err && err.message) ? err.message : 'unknown';
+          logSave('save', false, msg+' ('+elapsedSec+'s)');
+          console.error('cloud save failed:', err);
+          if (typeof toast === 'function') {
+            if (msg.toLowerCase().indexOf('size') >= 0 || msg.indexOf('large') >= 0) {
+              toast('データが大きすぎてクラウド保存できません', 'error');
+            } else if (err.code === 'PERMISSION_DENIED') {
+              toast('保存権限がありません', 'error');
+            } else {
+              toast('クラウド保存に失敗：'+msg, 'error');
+            }
+          }
+        } else if (committed && snap) {
+          // 成功：cloud の確定値で _prev を更新
+          // これにより次の queue 実行時のベースラインが正しくなる
+          var v = snap.val();
+          if (v) {
+            _prevDataSnapshot = JSON.parse(JSON.stringify(v));
+          }
+          logSave('save', true, '✓ '+elapsedSec+'s');
+        } else {
+          // committed=false：他のトランザクションが優先された
+          logSave('save', false, 'aborted ('+elapsedSec+'s)');
+        }
+        if (_pendingWrites === 0) {
+          if (_pendingCloudSnap !== null) {
+            var buf = _pendingCloudSnap;
+            _pendingCloudSnap = null;
+            try { applyCloudData(buf); } catch(e) { console.warn('apply buffered cloud failed:', e); }
           } else {
-            toast('クラウド保存に失敗：'+(msg||'通信エラー'), 'error');
+            setSyncStatus('synced');
           }
         }
-      }
-      // 書き込み完了：バッファされた cloud snapshot があれば適用
-      if (_pendingWrites === 0) {
-        if (_pendingCloudSnap !== null) {
-          var buf = _pendingCloudSnap;
-          _pendingCloudSnap = null;
-          try { applyCloudData(buf); } catch(e) { console.warn('apply buffered cloud failed:', e); }
-        } else {
-          setSyncStatus('synced');
-        }
-      }
-    }, true);
-  }
+        resolve();
+      }, true);
+    });
+  });
 }
 
 // ===== 同期状態の表示 =====
@@ -2232,6 +2288,47 @@ function setSyncStatus(state) {
     var when = _lastSyncedAt ? formatSyncTime(_lastSyncedAt) : '同期済';
     if (text) text.textContent = when;
   }
+}
+
+function updateSyncLogPanel() {
+  var modal = qs('#modal-sync-log');
+  if (!modal || modal.classList.contains('hidden')) return;
+  var summary = qs('#sync-log-summary');
+  var list = qs('#sync-log-list');
+  if (summary) {
+    var stateLabel = _isOffline ? '⚠ オフライン' : (_pendingWrites > 0 ? '⟳ 保存中' : '✓ 同期済');
+    var lastTxt = _lastSyncedAt ? formatSyncTime(_lastSyncedAt) : '—';
+    var errCount = _saveLog.filter(function(x){ return !x.ok && x.type === 'save'; }).length;
+    summary.innerHTML =
+      '<div><strong>現在の状態：</strong>'+stateLabel+'</div>'+
+      '<div><strong>未送信の保存：</strong>'+_pendingWrites+' 件</div>'+
+      '<div><strong>最後の同期：</strong>'+lastTxt+'</div>'+
+      '<div><strong>直近の失敗：</strong>'+errCount+' 件</div>';
+  }
+  if (list) {
+    if (!_saveLog.length) {
+      list.innerHTML = '<div class="sync-log-empty">まだ保存履歴はありません</div>';
+    } else {
+      list.innerHTML = _saveLog.map(function(it){
+        var t = new Date(it.ts);
+        var hh = String(t.getHours()).padStart(2,'0');
+        var mm = String(t.getMinutes()).padStart(2,'0');
+        var ss = String(t.getSeconds()).padStart(2,'0');
+        return '<div class="sync-log-item '+(it.ok?'ok':'ng')+'">'+
+          '<span class="sync-log-time">'+hh+':'+mm+':'+ss+'</span>'+
+          '<span class="sync-log-type">'+escHtml(it.type)+'</span>'+
+          '<span class="sync-log-msg">'+(it.ok?'':'❌ ')+escHtml(it.msg||'')+'</span>'+
+        '</div>';
+      }).join('');
+    }
+  }
+}
+
+function openSyncLogModal() {
+  var modal = qs('#modal-sync-log');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  updateSyncLogPanel();
 }
 
 function formatSyncTime(ts) {
@@ -7642,7 +7739,15 @@ document.addEventListener('DOMContentLoaded', function(){
   var logoutBtn    = qs('#user-logout-btn');
   var userInfoEl   = qs('#user-info');
   var syncBtn      = qs('#sync-status-btn');
-  if (syncBtn) syncBtn.addEventListener('click', function(){ forceSyncFromCloud(); });
+  if (syncBtn) syncBtn.addEventListener('click', function(){ openSyncLogModal(); });
+  // 同期ログモーダルのボタン
+  var syncClose = qs('#btn-sync-close');
+  if (syncClose) syncClose.addEventListener('click', function(){ qs('#modal-sync-log').classList.add('hidden'); });
+  var syncForce = qs('#btn-force-resync');
+  if (syncForce) syncForce.addEventListener('click', function(){
+    qs('#modal-sync-log').classList.add('hidden');
+    forceSyncFromCloud();
+  });
   // 1分おきに同期時刻表示を更新
   setInterval(function(){
     if (currentUser && _pendingWrites === 0 && !_isOffline) setSyncStatus('synced');
