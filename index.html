@@ -386,7 +386,9 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .material-alert-count { font-size: 12px; font-weight: 700; background: #f97316; color: #fff; border-radius: 99px; padding: 1px 8px; }
 .material-alert-body { border-top: 1px solid rgba(0,0,0,.08); }
 /* item base */
-.mal-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,.06); flex-wrap: wrap; }
+.mal-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid rgba(0,0,0,.06); flex-wrap: wrap; cursor: pointer; transition: filter .12s; }
+.mal-item:hover { filter: brightness(.97); }
+.mal-item:active { filter: brightness(.93); }
 .mal-item:last-child { border-bottom: none; }
 /* state backgrounds — アニメはバッジのみ */
 /* グループ別の枠（当日=赤／前日=黄／その他=緑） */
@@ -3253,7 +3255,7 @@ function renderMaterialAlert() {
       actionHtml = '<button class="mal-complete-btn" data-action="complete" data-tid="' + escHtml(t.id) + '">施工完了</button>';
     }
 
-    return '<div class="mal-item mal-item-' + s + '">'
+    return '<div class="mal-item mal-item-' + s + '" data-pid="' + escHtml(t.projectId||'') + '" data-tid="' + escHtml(t.id) + '" title="タップで案件の工程表を開く">'
       + '<div class="mal-badge mal-badge-' + s + '">' + badgeText + '</div>'
       + '<div class="mal-icon">' + getTaskIconSVG(t.name, 28) + '</div>'
       + '<div class="material-alert-info">'
@@ -3296,8 +3298,23 @@ function renderMaterialAlert() {
     + '</div>'
     + '</div>';
 
+  // 行クリックで案件の工程表へ遷移（ボタン類は除外）
+  wrap.querySelectorAll('.mal-item').forEach(function(row){
+    row.addEventListener('click', function(e){
+      // ボタン・アクション要素のクリックは除外
+      if (e.target.closest('[data-action]')) return;
+      var pid = row.dataset.pid;
+      var tid = row.dataset.tid;
+      if (!pid) return;
+      state.selectedProjectId = pid;
+      if (tid) state.selectedTaskId = tid;
+      navigate('gantt', pid);
+    });
+  });
+
   wrap.querySelectorAll('[data-action]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
       var tid = btn.dataset.tid;
       var action = btn.dataset.action;
       var task = data.tasks.find(function(t){ return t.id === tid; });
