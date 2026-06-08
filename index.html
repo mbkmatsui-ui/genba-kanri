@@ -76,6 +76,13 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .page-header h2 { font-size: 17px; font-weight: 700; color: var(--text); }
 .page-header .page-subtitle { font-size: 11px; color: var(--text-sub); margin-top: 2px; }
 .page-header .actions { margin-left: auto; display: flex; gap: 8px; }
+/* 印刷プレビューモーダル */
+.print-preview-modal { width: 96vw; max-width: 1100px; height: 92vh; max-height: 92vh; display: flex; flex-direction: column; padding: 0; }
+.print-preview-modal .modal-header { flex-shrink: 0; }
+.print-preview-modal .modal-footer { flex-shrink: 0; }
+.print-preview-body { flex: 1; min-height: 0; padding: 0; background: #555; overflow: hidden; }
+#print-preview-iframe { width: 100%; height: 100%; border: none; background: #fff; display: block; }
+
 /* 同期ログ */
 .sync-log-list { display: flex; flex-direction: column; gap: 4px; }
 .sync-log-item { display: flex; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px; background: var(--bg-raised); border-left: 3px solid var(--border); }
@@ -1807,6 +1814,23 @@ body.is-admin .admin-only { display:flex; }
 </div>
 
 <!-- 作業報告書（雛形・サンプル） -->
+<!-- 印刷プレビュー（アプリ内・閉じるで戻れる） -->
+<div class="modal-overlay hidden" id="modal-print-preview">
+  <div class="modal print-preview-modal">
+    <div class="modal-header">
+      <h3 id="modal-print-title">印刷プレビュー</h3>
+      <button class="modal-close" data-close-print>×</button>
+    </div>
+    <div class="modal-body print-preview-body">
+      <iframe id="print-preview-iframe" title="印刷プレビュー"></iframe>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" data-close-print>閉じる</button>
+      <button class="btn btn-primary" id="btn-print-now">🖨 印刷</button>
+    </div>
+  </div>
+</div>
+
 <!-- 同期状況の診断パネル -->
 <div class="modal-overlay hidden" id="modal-sync-log">
   <div class="modal" style="max-width:520px">
@@ -3645,18 +3669,16 @@ function openShareGanttDialog() {
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   qs('#sg-close').addEventListener('click', function(){ ov.remove(); });
 
-  // 印刷：新ウィンドウで開いて自動的に印刷ダイアログ
+  // 印刷：アプリ内モーダルでプレビュー→印刷（戻るボタンで戻れる）
   qs('#sg-print').addEventListener('click', function(){
-    var w = window.open('', '_blank');
-    if (!w) { alert('ポップアップがブロックされています。Safari の設定でブロックを解除してください'); return; }
     // 印刷では編集UI（✕ボタン・hover/フォーカス枠）を完全非表示
     var printOnlyCss = '\n.arrow-del{display:none !important}'+
       '.task-cell{cursor:default !important}'+
       '.task-cell:hover{outline:none !important}'+
       '.task-cell.range-start{outline:none !important}'+
       '[contenteditable="true"]:focus{outline:none !important;background:transparent !important}';
-    w.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+escHtml(p.name)+' 工程表</title><style>'+css+printOnlyCss+'</style></head><body>'+html+'<script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script></body></html>');
-    w.document.close();
+    var fullHtml = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>'+escHtml(p.name)+' 工程表</title><style>'+css+printOnlyCss+'</style></head><body>'+html+'</body></html>';
+    openPrintPreview(fullHtml, p.name + ' 工程表');
   });
 
   // 画像で共有：html2canvas をオンデマンド読込
@@ -3782,11 +3804,7 @@ function printCompletedProjects(projects) {
       '<th>日付</th><th>工事名</th><th>作業内容</th><th>作業員人数</th>'+
     '</tr></thead><tbody>'+eduRows+'</tbody></table>'+
     '</body></html>';
-  var w=window.open('','_blank','width=900,height=600');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  w.print();
+  openPrintPreview(html, '完了工事一覧');
 }
 
 // 案件をアーカイブ（完了履歴へ移動）
@@ -4200,6 +4218,40 @@ function formatWorkerCounts(counts) {
     .join('、');
 }
 
+// ===== 印刷プレビュー：アプリ内モーダルで表示（戻れる） =====
+function openPrintPreview(html, title) {
+  var modal = qs('#modal-print-preview');
+  var iframe = qs('#print-preview-iframe');
+  if (!modal || !iframe) {
+    // モーダル要素が無い場合は従来通り新規ウィンドウ
+    var w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされました。設定で許可してください'); return; }
+    w.document.write(html); w.document.close();
+    return;
+  }
+  var titleEl = qs('#modal-print-title');
+  if (titleEl) titleEl.textContent = title || '印刷プレビュー';
+  iframe.srcdoc = html;
+  modal.classList.remove('hidden');
+}
+function closePrintPreview() {
+  var modal = qs('#modal-print-preview');
+  var iframe = qs('#print-preview-iframe');
+  if (modal) modal.classList.add('hidden');
+  if (iframe) iframe.srcdoc = '';
+}
+function triggerPrintFromPreview() {
+  var iframe = qs('#print-preview-iframe');
+  if (!iframe || !iframe.contentWindow) return;
+  try {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+  } catch(e) {
+    console.warn('print failed:', e);
+    if (typeof toast === 'function') toast('印刷を実行できませんでした','error');
+  }
+}
+
 // ===== 作業報告書 1日毎 印刷 =====
 function openReportsPrintDialog() {
   var dateInput = qs('#reports-print-date');
@@ -4312,13 +4364,9 @@ function printDailyReport(dateStr) {
         '<div><span class="rpd-foot-lbl">作業員別</span>'+(totalsHtml||'記録なし')+'</div>'+
       '</div>'+
     '</div>'+
-    '<script>window.addEventListener("load",function(){setTimeout(function(){window.print();},400);});</'+'script>'+
     '</body></html>';
 
-  var w = window.open('', '_blank', 'width=900,height=1200');
-  if (!w) { alert('ポップアップがブロックされました。設定で許可してください'); return; }
-  w.document.write(html);
-  w.document.close();
+  openPrintPreview(html, dateLabel + ' 作業報告書');
 }
 
 function dailyReportPrintCss() {
@@ -4836,11 +4884,7 @@ function printHistory(monthKey, projects) {
     monthWorkerHtml+
     detailHtml+
     '</body></html>';
-  var w=window.open('','_blank','width=900,height=600');
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  w.print();
+  openPrintPreview(html, monthLabel + ' 完了工事一覧');
 }
 
 // ===== Photos =====
@@ -7795,6 +7839,18 @@ document.addEventListener('DOMContentLoaded', function(){
   if (syncForce) syncForce.addEventListener('click', function(){
     qs('#modal-sync-log').classList.add('hidden');
     forceSyncFromCloud();
+  });
+
+  // 印刷プレビューモーダルのボタン
+  qsa('#modal-print-preview [data-close-print]').forEach(function(el){
+    el.addEventListener('click', closePrintPreview);
+  });
+  var printNow = qs('#btn-print-now');
+  if (printNow) printNow.addEventListener('click', triggerPrintFromPreview);
+  // モーダル背景タップで閉じる
+  var ppOverlay = qs('#modal-print-preview');
+  if (ppOverlay) ppOverlay.addEventListener('click', function(e){
+    if (e.target === ppOverlay) closePrintPreview();
   });
   // 1分おきに同期時刻表示を更新
   setInterval(function(){
