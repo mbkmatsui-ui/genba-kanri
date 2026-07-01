@@ -3834,7 +3834,18 @@ function archiveProject(p, fromDelete) {
   // 完全なタスク情報を保存（後で工程表として閲覧するため）
   var fullTasks = projTasks.map(function(t){ return JSON.parse(JSON.stringify(t)); });
   var today = todayStr();
-  var completedMonth = today.substring(0,7); // YYYY-MM
+  // 完了月の判定：ボタンを押した月ではなく「実際に作業が終わった月」を採用。
+  // 優先順位：作業員記録の最新日 > タスクの最新 endDate > 案件の endDate > 今日
+  var completionAnchor = '';
+  if (workerRecords.length) {
+    completionAnchor = workerRecords[workerRecords.length-1].date || '';
+  }
+  if (!completionAnchor) {
+    var taskEnds = projTasks.map(function(t){ return t.endDate||''; }).filter(Boolean).sort();
+    if (taskEnds.length) completionAnchor = taskEnds[taskEnds.length-1];
+  }
+  if (!completionAnchor) completionAnchor = p.endDate || today;
+  var completedMonth = completionAnchor.substring(0,7); // YYYY-MM
   data.archivedProjects.push({
     id: p.id,
     name: p.name,
@@ -3845,7 +3856,8 @@ function archiveProject(p, fromDelete) {
     endDate: p.endDate||'',
     category: p.category||'',
     color: p.color||'',
-    archivedAt: today,
+    archivedAt: today,           // ボタンを押した日（履歴用）
+    completedAt: completionAnchor, // 実際に作業が終わった日
     completedMonth: completedMonth,
     isFromDelete: !!fromDelete,
     taskSummary: taskSummary,
