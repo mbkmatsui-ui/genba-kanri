@@ -5420,6 +5420,14 @@ function renderGantt() {
   }
   renderPhotoGallery();
   var zp = qs('#gantt-zoom-pct'); if (zp) zp.textContent = Math.round(state.ganttZoom*100)+'%';
+
+  // 現在開いているタブ（概要・写真・図面）も新しい案件の内容に描き直す
+  var tab = state.ganttTab || 'gantt';
+  try {
+    if (tab === 'overview')       renderGanttOverview();
+    else if (tab === 'photos')    renderGanttPhotosTab();
+    else if (tab === 'drawings')  renderDrawingsTab();
+  } catch(err) { console.warn('tab re-render failed:', err); }
   return;
 }
 
