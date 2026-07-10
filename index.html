@@ -2582,6 +2582,16 @@ function computeDataDelta(prev, cur) {
     return { added: added, updated: updated, deletedIds: deletedIds };
   }
   function eduKey(r){ return r.taskId + '' + r.date; }
+  function eduSig(r){
+    // 差分検出用シグネチャ（submittedAt など毎回変わるフィールドは除外）
+    return JSON.stringify({
+      c: r.count,
+      w: r.workers || [],
+      s: r.status || '',
+      n: r.progressNote || '',
+      a: r.assignee || ''
+    });
+  }
   function eduDelta(prevArr, curArr) {
     prevArr = prevArr || []; curArr = curArr || [];
     var prevMap = {};
@@ -2592,7 +2602,8 @@ function computeDataDelta(prev, cur) {
       if(!r || !r.taskId || !r.date) return;
       var k = eduKey(r); seen[k] = true;
       var p = prevMap[k];
-      if(!p || p.count !== r.count) upserts.push(r);
+      // count だけでなく workers/status/progressNote/assignee も含めて比較
+      if(!p || eduSig(p) !== eduSig(r)) upserts.push(r);
     });
     Object.keys(prevMap).forEach(function(k){ if(!seen[k]) deletedKeys.push(k); });
     return { upserts: upserts, deletedKeys: deletedKeys };
