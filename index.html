@@ -6590,6 +6590,13 @@ function saveDailyReport() {
     var noteEl = card.querySelector('.dr-progress-detail textarea[data-progress]');
     if (noteEl && status === 'active') progressNote = (noteEl.value || '').trim();
 
+    // 既存記録
+    var existingRec = (data.education||[]).find(function(r){ return r && r.taskId===tid && r.date===today; });
+    // 未入力の判定：作業員なし・ノートなし・状態が初期値（pending）
+    var isEmpty = (workers.length === 0) && !progressNote && (status === 'pending');
+    // 既存レコードが無く、かつ未入力ならスキップ（記入していない扱い）
+    if (isEmpty && !existingRec) return;
+
     // task 側を更新
     task.status = status;
     if (status === 'done') {
