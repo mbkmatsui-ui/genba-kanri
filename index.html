@@ -526,6 +526,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .dr-task-header { display: flex; flex-direction: column; gap: 2px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--border-lt); }
 .dr-task-name { font-size: 15px; font-weight: 700; color: var(--text); }
 .dr-task-proj { font-size: 11px; color: var(--text-muted); }
+.dr-task-submitted { font-size: 10px; font-weight: 700; color: #15803d; margin-top: 3px; }
+.dr-task-submitted.dr-task-notyet { color: #b45309; }
 .dr-section { margin-top: 12px; }
 .dr-label { display: block; font-size: 11px; font-weight: 700; letter-spacing: .06em; color: var(--text-sub); text-transform: uppercase; margin-bottom: 6px; }
 .dr-status-row { display: flex; gap: 6px; }
@@ -2530,17 +2532,38 @@ function computeAuditChanges(oldD, newD) {
   if (newPh > oldPh) changes.push(makeAuditEntry('add', 'photo', '写真', (newPh - oldPh) + '枚を追加'));
   else if (oldPh > newPh) changes.push(makeAuditEntry('delete', 'photo', '写真', (oldPh - newPh) + '枚を削除'));
 
-  // 作業員人数（education）
-  var oldE = indexBy(oldD.education, 'taskId');
+  // 作業報告書（education）— 作業員・状態・進行ノートの変更も監査ログに残す
+  function _eduSummary(r){
+    var wk = (r.workers && r.workers.length) ? r.workers.join('、') : (r.count + '人');
+    var stMap = { pending:'準備', active:'施行中', done:'完了' };
+    var st = r.status ? ('['+ (stMap[r.status]||r.status) +'] ') : '';
+    var nt = r.progressNote ? ' 進行:'+r.progressNote : '';
+    return st + '作業員: ' + wk + nt;
+  }
+  function _eduSig(r){
+    return JSON.stringify({
+      c: r.count,
+      w: (r.workers||[]).slice().sort(),
+      s: r.status || '',
+      n: r.progressNote || ''
+    });
+  }
   var newE = (newD.education||[]);
   newE.forEach(function(rec){
     var tname = (newT[rec.taskId]||{}).name || '';
-    var key = rec.taskId + '_' + rec.date;
     var oldRec = (oldD.education||[]).find(function(e){ return e.taskId===rec.taskId && e.date===rec.date; });
     if (!oldRec) {
-      changes.push(makeAuditEntry('add', 'education', tname, rec.date+' の作業員 '+rec.count+' 人を登録'));
-    } else if (oldRec.count !== rec.count) {
-      changes.push(makeAuditEntry('update', 'education', tname, rec.date+' の作業員 '+oldRec.count+' → '+rec.count+' 人'));
+      changes.push(makeAuditEntry('add', 'education', tname, rec.date+' 作業報告書 提出 / '+_eduSummary(rec)));
+    } else if (_eduSig(oldRec) !== _eduSig(rec)) {
+      changes.push(makeAuditEntry('update', 'education', tname, rec.date+' 作業報告書 更新 / '+_eduSummary(rec)));
+    }
+  });
+  // education の削除も記録
+  (oldD.education||[]).forEach(function(oldRec){
+    var stillThere = newE.find(function(e){ return e.taskId===oldRec.taskId && e.date===oldRec.date; });
+    if (!stillThere) {
+      var tname = (newT[oldRec.taskId]||{}).name || '';
+      changes.push(makeAuditEntry('delete', 'education', tname, oldRec.date+' 作業報告書 削除'));
     }
   });
 
@@ -6372,10 +6395,24 @@ function dailyReportTaskCardHtml(entry, dateStr) {
     return '<button type="button" class="dr-worker-chip'+sel+'" data-worker="'+escHtml(w)+'">'+escHtml(w)+'</button>';
   }).join('');
 
+  // 提出履歴ラベル（既存レコードがあれば表示）
+  var submitLabel = '';
+  if (existing && existing.submittedAt) {
+    var sd = new Date(existing.submittedAt);
+    var hh = String(sd.getHours()).padStart(2,'0');
+    var mm = String(sd.getMinutes()).padStart(2,'0');
+    var mo = sd.getMonth()+1, da = sd.getDate();
+    var byName = existing.submittedByName || existing.submittedByEmail || existing.assignee || '';
+    submitLabel = '<div class="dr-task-submitted">✓ 最終送信 '+mo+'/'+da+' '+hh+':'+mm+(byName?' by '+escHtml(byName):'')+'</div>';
+  } else {
+    submitLabel = '<div class="dr-task-submitted dr-task-notyet">未送信</div>';
+  }
+
   return '<div class="dr-task-card" data-tid="'+t.id+'" data-pid="'+t.projectId+'">'+
     '<div class="dr-task-header">'+
       '<div class="dr-task-name">'+escHtml(t.name||'(無題)')+'</div>'+
       '<div class="dr-task-proj">'+escHtml(p.name||'')+(p.client?'（'+escHtml(p.client)+'）':'')+'</div>'+
+      submitLabel+
     '</div>'+
     '<div class="dr-section">'+
       '<label class="dr-label">本日の進捗</label>'+
@@ -6619,15 +6656,22 @@ function saveDailyReport() {
       assignee: assignee,
       status: status,
       progressNote: progressNote,
-      submittedAt: Date.now()
+      submittedAt: Date.now(),
+      submittedByEmail: (currentUser && currentUser.email) || '',
+      submittedByName: (currentUser && (currentUser.displayName || currentUser.email)) || ''
     });
     savedCount++;
   });
+  if (savedCount === 0) {
+    toast('保存する内容がありません','error');
+    return;
+  }
   saveData(data);
   qs('#modal-daily-report').classList.add('hidden');
-  toast(savedCount + '件のタスクを報告書として保存しました','success');
+  toast(savedCount + '件を保存しました。編集履歴で送信ログを確認できます','success');
   // 関連表示の更新
   try { if (state.view === 'dashboard') renderDashboard(); } catch(e) {}
+  try { if (state.view === 'reports') renderReports(); } catch(e) {}
 }
 
 // ===== Clients =====
