@@ -2030,11 +2030,21 @@ function _onAppForeground() {
   try { logSave && logSave('foreground', true, 'visibility → 再同期'); } catch(e){}
   try { if (typeof forceSyncFromCloud === 'function') forceSyncFromCloud(); } catch(e){}
 }
+// PWA を背面に送るとき：未送信がある場合はデータ消失防止のため確認・記録
+function _onAppBackground() {
+  if (_pendingWrites > 0) {
+    try { logSave && logSave('backgrounded', false, _pendingWrites+' 件 未送信のまま背面へ'); } catch(e){}
+    // localStorage には既に書き込まれているので、次回起動時の初回同期マージで拾える
+  }
+}
 try {
   document.addEventListener('visibilitychange', function(){
     if (document.visibilityState === 'visible') _onAppForeground();
+    else _onAppBackground();
   });
   window.addEventListener('focus', _onAppForeground);
+  window.addEventListener('blur', _onAppBackground);
+  window.addEventListener('pagehide', _onAppBackground);
   window.addEventListener('pageshow', function(e){ if (e.persisted) _onAppForeground(); });
 } catch(e) {}
 
@@ -2255,8 +2265,20 @@ function saveData(d) {
   logSave('enqueue', true, 'pending '+_pendingWrites);
 
   // キューに繋げて直列実行（前の transaction が完了するまで次は始まらない）
-  _saveQueue = _saveQueue.then(function(){
+  // 前の transaction がエラーになっても catch して次に進める（キュー詰まり防止）
+  _saveQueue = _saveQueue.catch(function(){ return; }).then(function(){
     return new Promise(function(resolve){
+      var resolved = false;
+      function safeResolve(){ if (!resolved) { resolved = true; resolve(); } }
+      // 60 秒タイムアウト（Firebase がハングした場合の保険。次のキューを進める）
+      var timeoutId = setTimeout(function(){
+        if (!resolved) {
+          _pendingWrites = Math.max(0, (_pendingWrites||0) - 1);
+          logSave('save', false, 'timeout 60s');
+          if (_pendingWrites === 0) setSyncStatus('error');
+          safeResolve();
+        }
+      }, 60000);
       // ベースラインは queue 実行時点の _prev を採用
       // （直前の save の commit 後に _prev が更新されているのでこれが「クラウドが持っている確定値」）
       var localPrev = _prevDataSnapshot ? JSON.parse(JSON.stringify(_prevDataSnapshot)) : null;
@@ -2305,7 +2327,8 @@ function saveData(d) {
             setSyncStatus('synced');
           }
         }
-        resolve();
+        clearTimeout(timeoutId);
+        safeResolve();
       }, true);
     });
   });
@@ -2402,19 +2425,35 @@ function formatSyncTime(ts) {
   return hh+':'+mm;
 }
 
-// クラウドの値をローカル data へ反映するヘルパー（複数箇所で再利用）
-// ローカルに未保存の編集がある場合はマージして上書き消失を防ぐ
+// クラウドの値をローカル data へ反映するヘルパー
+// ★重要：ローカルに未送信の編集がある場合は絶対にリセットしない。マージして保護する。
+// 初回同期時は localStorage に入っていた（クラウドまで届いていない可能性のある）ローカル値を
+// クラウドへの追記として拾い、以降のセーブで確実にサーバへ送る。
 function applyCloudData(cloud) {
   if (!cloud) return;
   try { ensureDataDefaults(cloud); } catch(e) {}
 
   var merged = cloud;
+  var hasUnsavedLocalChanges = false;
+  var isFirstSync = !_lastAppliedCloud;
   try {
-    if (_lastAppliedCloud && data) {
-      var unsavedDelta = computeDataDelta(_lastAppliedCloud, data);
+    if (data) {
+      // 初回同期：ベースラインが無いので cloud を仮ベースラインにして、
+      // ローカルにあってクラウドに無いものを「未送信」として保護する
+      var baseline = _lastAppliedCloud || cloud;
+      var unsavedDelta = computeDataDelta(baseline, data);
+      // 初回同期の場合：安全側に倒し、削除操作は反映しない
+      // （他端末が削除した可能性のあるレコードを誤って復活させるより、削除は同期後の通常フローに任せる。
+      //   ただし「ローカル追加」「作業員記録の upsert」は必ず保護する = データを消さない）
+      if (isFirstSync) {
+        ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
+          if (unsavedDelta[k]) unsavedDelta[k].deletedIds = [];
+        });
+        if (unsavedDelta.education) unsavedDelta.education.deletedKeys = [];
+      }
       // 未保存の変更があるか判定
       function hasArrChange(a){ return (a.added && a.added.length) || (a.deletedIds && a.deletedIds.length) || (a.updated && Object.keys(a.updated).length); }
-      var hasUnsaved = hasArrChange(unsavedDelta.projects)
+      hasUnsavedLocalChanges = hasArrChange(unsavedDelta.projects)
                     || hasArrChange(unsavedDelta.tasks)
                     || hasArrChange(unsavedDelta.clients)
                     || hasArrChange(unsavedDelta.photos)
@@ -2423,9 +2462,10 @@ function applyCloudData(cloud) {
                     || (unsavedDelta.education.upserts && unsavedDelta.education.upserts.length)
                     || (unsavedDelta.education.deletedKeys && unsavedDelta.education.deletedKeys.length)
                     || !!unsavedDelta.settings;
-      if (hasUnsaved) {
+      if (hasUnsavedLocalChanges) {
         merged = applyDelta(cloud, unsavedDelta);
-        console.log('[cloudSync] preserved local unsaved changes during sync');
+        console.log('[cloudSync] 未送信のローカル変更を保護（firstSync=' + isFirstSync + '）');
+        try { logSave && logSave('protect-local', true, 'ローカル未送信を保護'+(isFirstSync?'(初回)':'')); } catch(e){}
       }
     }
   } catch(e) { console.warn('[cloudSync] merge failed, using cloud as-is:', e); merged = cloud; }
@@ -2443,6 +2483,17 @@ function applyCloudData(cloud) {
   _lastSyncedAt = Date.now();
   if (_pendingWrites === 0) setSyncStatus('synced');
   try { checkCapacityAndWarn(data); } catch(e) {}
+
+  // 未送信のローカル変更を保護した場合、自動で saveData を呼んでクラウドへ再送する
+  // これにより「PWA suspend → transaction lost → 復帰時 cloud にない」ケースを救済
+  if (hasUnsavedLocalChanges && currentUser) {
+    setTimeout(function(){
+      try {
+        console.log('[cloudSync] auto-resync: 未送信変更をクラウドへ再送');
+        saveData(data);
+      } catch(e) { console.warn('[cloudSync] auto-resync failed:', e); }
+    }, 200);
+  }
 }
 
 // 手動で最新を取得（強制リロード）
