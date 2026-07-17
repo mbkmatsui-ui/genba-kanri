@@ -2442,14 +2442,35 @@ function applyCloudData(cloud) {
       // ローカルにあってクラウドに無いものを「未送信」として保護する
       var baseline = _lastAppliedCloud || cloud;
       var unsavedDelta = computeDataDelta(baseline, data);
-      // 初回同期の場合：安全側に倒し、削除操作は反映しない
-      // （他端末が削除した可能性のあるレコードを誤って復活させるより、削除は同期後の通常フローに任せる。
-      //   ただし「ローカル追加」「作業員記録の upsert」は必ず保護する = データを消さない）
+      // ★初回同期の安全ルール（他メンバーの新しい編集を古いローカルで上書きしないための多層フィルター）
+      // - 削除：スキップ（他端末が消した可能性のあるものを勝手に復活させない）
+      // - 更新：スキップ（自分のローカルの古い版で他人の最新編集を上書きしない）
+      // - 追加：ローカルにあってクラウドに無いものだけ保護（自分の未送信を守る）
+      // - education だけ例外：submittedAt を比較してローカルが厳密に新しい場合のみ保護
       if (isFirstSync) {
         ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
-          if (unsavedDelta[k]) unsavedDelta[k].deletedIds = [];
+          if (unsavedDelta[k]) {
+            unsavedDelta[k].deletedIds = [];
+            unsavedDelta[k].updated = {};   // ← 追加：更新も上書きさせない
+          }
         });
-        if (unsavedDelta.education) unsavedDelta.education.deletedKeys = [];
+        if (unsavedDelta.settings) unsavedDelta.settings = null;
+        if (unsavedDelta.education) {
+          unsavedDelta.education.deletedKeys = [];
+          // education の upserts は submittedAt で判定：ローカル > クラウド のときのみ保護
+          var cloudEduMap = {};
+          (cloud.education||[]).forEach(function(r){
+            if (r && r.taskId && r.date) cloudEduMap[r.taskId + '_' + r.date] = r;
+          });
+          unsavedDelta.education.upserts = (unsavedDelta.education.upserts||[]).filter(function(r){
+            var k = r.taskId + '_' + r.date;
+            var cr = cloudEduMap[k];
+            if (!cr) return true;                 // クラウドに無い → 未送信のローカル追加として保護
+            var lt = Number(r.submittedAt || 0);
+            var ct = Number(cr.submittedAt || 0);
+            return lt > ct;                        // ローカルが厳密に新しい場合のみ保護
+          });
+        }
       }
       // 未保存の変更があるか判定
       function hasArrChange(a){ return (a.added && a.added.length) || (a.deletedIds && a.deletedIds.length) || (a.updated && Object.keys(a.updated).length); }
