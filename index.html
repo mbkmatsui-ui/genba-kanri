@@ -2229,6 +2229,47 @@ function logSave(type, ok, msg) {
   try { updateSyncLogPanel(); } catch(e) {}
 }
 
+// ====== 未送信の書き込み追跡 ======
+// localStorage に「まだクラウドで confirm されていない編集」の ID を保存する。
+// アプリ再起動後、cloud snapshot が届いたときに「これは私の未送信」と
+// 「これはただの stale な localStorage」を区別できるようにする。
+var PENDING_KEY = DB_KEY + '_pending_v1';
+function _readPending() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '{}'); } catch(e) { return {}; }
+}
+function _writePending(m) {
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(m)); } catch(e) {}
+}
+function _markPending(delta) {
+  var m = _readPending();
+  ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
+    if (!m[k]) m[k] = {};
+    (delta[k].added||[]).forEach(function(x){ if (x && x.id) m[k][x.id] = 1; });
+    Object.keys(delta[k].updated||{}).forEach(function(id){ m[k][id] = 1; });
+    (delta[k].deletedIds||[]).forEach(function(id){ m[k][id] = 1; });
+  });
+  if (!m.education) m.education = {};
+  (delta.education.upserts||[]).forEach(function(r){ if (r && r.taskId && r.date) m.education[r.taskId+'_'+r.date] = 1; });
+  (delta.education.deletedKeys||[]).forEach(function(k){ m.education[k] = 1; });
+  if (delta.settings) m.settings = 1;
+  _writePending(m);
+}
+function _clearPending(delta) {
+  var m = _readPending();
+  ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
+    if (!m[k]) return;
+    (delta[k].added||[]).forEach(function(x){ if (x && x.id) delete m[k][x.id]; });
+    Object.keys(delta[k].updated||{}).forEach(function(id){ delete m[k][id]; });
+    (delta[k].deletedIds||[]).forEach(function(id){ delete m[k][id]; });
+  });
+  if (m.education) {
+    (delta.education.upserts||[]).forEach(function(r){ if (r && r.taskId && r.date) delete m.education[r.taskId+'_'+r.date]; });
+    (delta.education.deletedKeys||[]).forEach(function(k){ delete m.education[k]; });
+  }
+  if (delta.settings) delete m.settings;
+  _writePending(m);
+}
+
 function saveData(d) {
   // ローカル保存（オフラインでも即座に反映）
   try {
@@ -2263,6 +2304,15 @@ function saveData(d) {
   var snapshot = JSON.parse(JSON.stringify(d));
   var enqueueTime = Date.now();
   logSave('enqueue', true, 'pending '+_pendingWrites);
+
+  // 未送信の書き込みを localStorage にマークしておく（アプリ復帰後の保護に使う）
+  // enqueue 時点で計算しておくと、この後の並列 saveData 呼び出しに影響されない
+  var deltaAtEnqueue = null;
+  try {
+    var baselineAtEnqueue = _prevDataSnapshot || {};
+    deltaAtEnqueue = computeDataDelta(baselineAtEnqueue, snapshot);
+    _markPending(deltaAtEnqueue);
+  } catch(e) { console.warn('markPending failed:', e); }
 
   // キューに繋げて直列実行（前の transaction が完了するまで次は始まらない）
   // 前の transaction がエラーになっても catch して次に進める（キュー詰まり防止）
@@ -2313,9 +2363,11 @@ function saveData(d) {
           if (v) {
             _prevDataSnapshot = JSON.parse(JSON.stringify(v));
           }
+          // 未送信マークをクリア（成功時のみ）
+          if (deltaAtEnqueue) { try { _clearPending(deltaAtEnqueue); } catch(e){} }
           logSave('save', true, '✓ '+elapsedSec+'s');
         } else {
-          // committed=false：他のトランザクションが優先された
+          // committed=false：他のトランザクションが優先された。未送信マークは保持
           logSave('save', false, 'aborted ('+elapsedSec+'s)');
         }
         if (_pendingWrites === 0) {
@@ -2442,35 +2494,54 @@ function applyCloudData(cloud) {
       // ローカルにあってクラウドに無いものを「未送信」として保護する
       var baseline = _lastAppliedCloud || cloud;
       var unsavedDelta = computeDataDelta(baseline, data);
-      // ★初回同期の安全ルール（他メンバーの新しい編集を古いローカルで上書きしないための多層フィルター）
-      // - 削除：スキップ（他端末が消した可能性のあるものを勝手に復活させない）
-      // - 更新：スキップ（自分のローカルの古い版で他人の最新編集を上書きしない）
-      // - 追加：ローカルにあってクラウドに無いものだけ保護（自分の未送信を守る）
-      // - education だけ例外：submittedAt を比較してローカルが厳密に新しい場合のみ保護
-      if (isFirstSync) {
-        ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
-          if (unsavedDelta[k]) {
-            unsavedDelta[k].deletedIds = [];
-            unsavedDelta[k].updated = {};   // ← 追加：更新も上書きさせない
-          }
-        });
-        if (unsavedDelta.settings) unsavedDelta.settings = null;
-        if (unsavedDelta.education) {
-          unsavedDelta.education.deletedKeys = [];
-          // education の upserts は submittedAt で判定：ローカル > クラウド のときのみ保護
-          var cloudEduMap = {};
-          (cloud.education||[]).forEach(function(r){
-            if (r && r.taskId && r.date) cloudEduMap[r.taskId + '_' + r.date] = r;
-          });
-          unsavedDelta.education.upserts = (unsavedDelta.education.upserts||[]).filter(function(r){
-            var k = r.taskId + '_' + r.date;
-            var cr = cloudEduMap[k];
-            if (!cr) return true;                 // クラウドに無い → 未送信のローカル追加として保護
-            var lt = Number(r.submittedAt || 0);
-            var ct = Number(cr.submittedAt || 0);
-            return lt > ct;                        // ローカルが厳密に新しい場合のみ保護
-          });
+      // ★セーフマージのフィルター（他メンバーの新しい編集を古いローカルで上書きしないため）
+      // ローカルの差分は「未送信 pending 済み」のものだけ保護する。
+      // pending でないローカル変更は「stale」とみなしてクラウド側を優先する。
+      // - 追加：cloud に無いものは pending 判定を経由（pending 済みなら保護、そうでなければ捨てる）
+      //         ※ただし cloud に他人が追加したものは常に反映される（別ロジック）
+      // - 更新：pending 済みのみ保護（stale な localStorage が上書きしない）
+      // - 削除：pending 済みのみ実行（他端末で復活したものを勝手に消さない）
+      var pendingMap = _readPending();
+      function _isPending(kind, id){ return !!(pendingMap[kind] && pendingMap[kind][id]); }
+      ['projects','tasks','clients','photos','drawings','archivedProjects'].forEach(function(k){
+        if (!unsavedDelta[k]) return;
+        var pMap = pendingMap[k] || {};
+        // added: pending だけ保護（そうでなければ既に他端末で削除された可能性）
+        // 初回同期時は added も pending の場合のみ保護。通常時はすべて保護しても安全（applyDelta は id 重複を無視）。
+        if (isFirstSync) {
+          unsavedDelta[k].added = (unsavedDelta[k].added||[]).filter(function(x){ return x && x.id && pMap[x.id]; });
         }
+        // updated: pending のみ保護
+        var filteredUpd = {};
+        Object.keys(unsavedDelta[k].updated||{}).forEach(function(id){
+          if (pMap[id]) filteredUpd[id] = unsavedDelta[k].updated[id];
+        });
+        unsavedDelta[k].updated = filteredUpd;
+        // deletedIds: pending のみ実行
+        unsavedDelta[k].deletedIds = (unsavedDelta[k].deletedIds||[]).filter(function(id){ return pMap[id]; });
+      });
+      // settings: pending 済みなら保護
+      if (unsavedDelta.settings && !pendingMap.settings) unsavedDelta.settings = null;
+      // education
+      if (unsavedDelta.education) {
+        var pe = pendingMap.education || {};
+        var cloudEduMap = {};
+        (cloud.education||[]).forEach(function(r){
+          if (r && r.taskId && r.date) cloudEduMap[r.taskId + '_' + r.date] = r;
+        });
+        unsavedDelta.education.upserts = (unsavedDelta.education.upserts||[]).filter(function(r){
+          var k = r.taskId + '_' + r.date;
+          var cr = cloudEduMap[k];
+          // cloud に無い場合：pending なら保護、そうでなければ捨てる（他端末で削除された可能性）
+          if (!cr) return !!pe[k];
+          // cloud に既にある場合：pending でなければ触らない（stale 保護）
+          if (!pe[k]) return false;
+          // pending 済み → submittedAt で LWW（ローカルが >= なら保護）
+          var lt = Number(r.submittedAt || 0);
+          var ct = Number(cr.submittedAt || 0);
+          return lt >= ct;
+        });
+        unsavedDelta.education.deletedKeys = (unsavedDelta.education.deletedKeys||[]).filter(function(k){ return !!pe[k]; });
       }
       // 未保存の変更があるか判定
       function hasArrChange(a){ return (a.added && a.added.length) || (a.deletedIds && a.deletedIds.length) || (a.updated && Object.keys(a.updated).length); }
