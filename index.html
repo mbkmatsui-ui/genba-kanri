@@ -552,6 +552,8 @@ body { font-family: 'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic','Mei
 .dr-worker-custom input { flex: 1; padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 13px; background: var(--bg-raised); color: var(--text); }
 .dr-worker-summary { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
 .dr-worker-summary .dr-worker-count { font-weight: 700; color: var(--text); }
+.dr-task-hint { margin-top: 10px; padding: 8px 10px; background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; font-size: 11px; font-weight: 700; color: #92400e; line-height: 1.6; }
+.dr-task-hint.hidden { display: none; }
 .today-report-badge { display: inline-block; font-size: 10px; padding: 2px 8px; color: #fff; border-radius: 999px; font-weight: 700; line-height: 1.4; }
 .today-report-badge.unreported { background: #dc2626; }
 @media print {
@@ -6551,7 +6553,7 @@ function dailyReportTaskCardHtml(entry, dateStr) {
     submitLabel = '<div class="dr-task-submitted dr-task-notyet">未送信</div>';
   }
 
-  return '<div class="dr-task-card" data-tid="'+t.id+'" data-pid="'+t.projectId+'">'+
+  return '<div class="dr-task-card" data-tid="'+t.id+'" data-pid="'+t.projectId+'"'+(existing?' data-hasrec="1"':'')+'>'+
     '<div class="dr-task-header">'+
       '<div class="dr-task-name">'+escHtml(t.name||'(無題)')+'</div>'+
       '<div class="dr-task-proj">'+escHtml(p.name||'')+(p.client?'（'+escHtml(p.client)+'）':'')+'</div>'+
@@ -6577,6 +6579,7 @@ function dailyReportTaskCardHtml(entry, dateStr) {
       '</div>'+
       '<div class="dr-worker-summary">選択中：<span class="dr-worker-count">0</span> 人 <span class="dr-worker-names"></span></div>'+
     '</div>'+
+    '<div class="dr-task-hint hidden">未記入のため保存されません。作業員0名のまま提出する場合は、上の「本日の進捗」ボタンを押してください。</div>'+
   '</div>';
 }
 
@@ -6658,6 +6661,7 @@ function openDailyReportModal(assignee, isReopen, dateStr) {
         });
       }
       updateWorkerSummary(card);
+      updateCardEmptyHint(card);
     });
     // ステータスボタンのトグル
     body.querySelectorAll('.dr-task-card').forEach(function(card){
@@ -6668,6 +6672,7 @@ function openDailyReportModal(assignee, isReopen, dateStr) {
           var s = btn.dataset.status;
           var detail = card.querySelector('.dr-progress-detail');
           detail.style.display = (s==='active') ? '' : 'none';
+          markCardTouched(card);
         });
       });
       // 作業員チップ（custom は makeCustomWorkerChip 内で既にバインド済みなのでスキップ）
@@ -6675,6 +6680,7 @@ function openDailyReportModal(assignee, isReopen, dateStr) {
         chip.addEventListener('click', function(){
           chip.classList.toggle('selected');
           updateWorkerSummary(card);
+          markCardTouched(card);
         });
       });
       // 直接入力追加
@@ -6695,9 +6701,12 @@ function openDailyReportModal(assignee, isReopen, dateStr) {
         }
         customInput.value = '';
         updateWorkerSummary(card);
+        markCardTouched(card);
       }
       addBtn.addEventListener('click', addCustom);
       customInput.addEventListener('keypress', function(e){ if (e.key === 'Enter') { e.preventDefault(); addCustom(); } });
+      var noteInput = card.querySelector('.dr-progress-detail textarea[data-progress]');
+      if (noteInput) noteInput.addEventListener('input', function(){ markCardTouched(card); });
     });
   }
   modal.classList.remove('hidden');
@@ -6729,16 +6738,46 @@ function makeCustomWorkerChip(name, card) {
       chip.dataset.worker = newName;
       chip.querySelector('.dr-worker-chip-text').textContent = newName;
       updateWorkerSummary(card);
+      markCardTouched(card);
     } else if (t.classList.contains('dr-worker-chip-remove')) {
       e.stopPropagation();
       chip.remove();
       updateWorkerSummary(card);
+      markCardTouched(card);
     } else {
       chip.classList.toggle('selected');
       updateWorkerSummary(card);
+      markCardTouched(card);
     }
   });
   return chip;
+}
+
+// カードが「未記入（＝保存対象外）」かどうかの判定
+// 作業員0名でも、進捗ボタン等を一度でも操作していれば提出できる
+function isCardUntouchedEmpty(card) {
+  if (!card) return false;
+  if (card.dataset.hasrec === '1') return false;   // 既存の報告があるカードは常に保存対象
+  if (card.dataset.touched === '1') return false;  // 一度でも操作していれば保存対象
+  var statusBtn = card.querySelector('.dr-status-btn.active');
+  var status = statusBtn ? statusBtn.dataset.status : 'pending';
+  if (status !== 'pending') return false;          // 施行中／完了は従来どおり0名でも保存
+  if (card.querySelectorAll('.dr-worker-chip.selected').length) return false;
+  var noteEl = card.querySelector('.dr-progress-detail textarea[data-progress]');
+  if (noteEl && (noteEl.value || '').trim()) return false;
+  return true;
+}
+
+function updateCardEmptyHint(card) {
+  if (!card) return;
+  var hint = card.querySelector('.dr-task-hint');
+  if (hint) hint.classList.toggle('hidden', !isCardUntouchedEmpty(card));
+}
+
+function markCardTouched(card) {
+  if (!card) return;
+  card.dataset.touched = '1';
+  updateCardEmptyHint(card);
 }
 
 function updateWorkerSummary(card) {
@@ -6758,6 +6797,7 @@ function saveDailyReport() {
   var dateSelEl = qs('#dr-date-sel');
   var today = (dateSelEl && dateSelEl.value) ? dateSelEl.value : todayStr();
   var savedCount = 0;
+  var skippedCount = 0;
   cards.forEach(function(card){
     var tid = card.dataset.tid;
     var task = (data.tasks||[]).find(function(t){ return t.id === tid; });
@@ -6772,10 +6812,9 @@ function saveDailyReport() {
 
     // 既存記録
     var existingRec = (data.education||[]).find(function(r){ return r && r.taskId===tid && r.date===today; });
-    // 未入力の判定：作業員なし・ノートなし・状態が初期値（pending）
-    var isEmpty = (workers.length === 0) && !progressNote && (status === 'pending');
-    // 既存レコードが無く、かつ未入力ならスキップ（記入していない扱い）
-    if (isEmpty && !existingRec) return;
+    // 未記入の判定：一度も操作していない準備中カードのみスキップ（記入していない扱い）
+    // ※進捗ボタン等を一度でも押していれば、準備中かつ作業員0名でも提出できる
+    if (!existingRec && isCardUntouchedEmpty(card)) { skippedCount++; return; }
 
     // task 側を更新
     task.status = status;
@@ -6806,12 +6845,14 @@ function saveDailyReport() {
     savedCount++;
   });
   if (savedCount === 0) {
-    toast('保存する内容がありません','error');
+    toast(skippedCount
+      ? '未記入のため保存されませんでした。「本日の進捗」ボタンを押してから保存してください'
+      : '保存する内容がありません','error');
     return;
   }
   saveData(data);
   qs('#modal-daily-report').classList.add('hidden');
-  toast(savedCount + '件を保存しました。編集履歴で送信ログを確認できます','success');
+  toast(savedCount + '件を保存しました'+(skippedCount ? '（未記入 '+skippedCount+'件はスキップ）' : '')+'。編集履歴で送信ログを確認できます','success');
   // 関連表示の更新
   try { if (state.view === 'dashboard') renderDashboard(); } catch(e) {}
   try { if (state.view === 'reports') renderReports(); } catch(e) {}
