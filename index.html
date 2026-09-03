@@ -2321,6 +2321,8 @@ function saveData(d) {
   _saveQueue = _saveQueue.catch(function(){ return; }).then(function(){
     return new Promise(function(resolve){
       var resolved = false;
+      // commit 成功時のクラウド確定値（待避スナップショットより必ず新しい）
+      var committedCloud = null;
       function safeResolve(){ if (!resolved) { resolved = true; resolve(); } }
       // 60 秒タイムアウト（Firebase がハングした場合の保険。次のキューを進める）
       var timeoutId = setTimeout(function(){
@@ -2364,6 +2366,7 @@ function saveData(d) {
           var v = snap.val();
           if (v) {
             _prevDataSnapshot = JSON.parse(JSON.stringify(v));
+            committedCloud = v;
           }
           // 未送信マークをクリア（成功時のみ）
           if (deltaAtEnqueue) { try { _clearPending(deltaAtEnqueue); } catch(e){} }
@@ -2374,7 +2377,10 @@ function saveData(d) {
         }
         if (_pendingWrites === 0) {
           if (_pendingCloudSnap !== null) {
-            var buf = _pendingCloudSnap;
+            // 待避中の snapshot は「自分の書き込みが確定する前」に受信したもの。
+            // commit 確定値のほうが必ず新しいので、そちらを優先する。
+            // 古い snapshot を適用すると、pending 解除済みの保存内容が画面から消える。
+            var buf = committedCloud || _pendingCloudSnap;
             _pendingCloudSnap = null;
             try { applyCloudData(buf); } catch(e) { console.warn('apply buffered cloud failed:', e); }
           } else {
@@ -8240,7 +8246,10 @@ document.addEventListener('DOMContentLoaded', function(){
       if (!_dataSubscribed) {
         _dataSubscribed = true;
         _prevDataSnapshot = JSON.parse(JSON.stringify(data));
-        _lastAppliedCloud = JSON.parse(JSON.stringify(data));
+        // _lastAppliedCloud はローカル data で埋めない。
+        // 埋めてしまうと初回同期の差分が常に空になり、未送信（pending）の
+        // ローカル編集が保護されずクラウド値で丸ごと上書きされる。
+        _lastAppliedCloud = null;
         fbDb.ref('data').on('value', function(snap){
           var cloud = snap.val();
           if (cloud) {
