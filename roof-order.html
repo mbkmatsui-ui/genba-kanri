@@ -1,0 +1,1386 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="屋根材発注">
+  <title>屋根材 発注フォーム</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      padding: 16px;
+    }
+    .app-header {
+      background: linear-gradient(135deg, #1a3a5c, #2d6a9f);
+      color: white;
+      padding: 18px 20px;
+      border-radius: 14px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .app-header .icon { font-size: 28px; }
+    .app-header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+    .app-header p { font-size: 12px; opacity: 0.85; margin-top: 2px; }
+
+    /* ステッパー */
+    .stepper {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 20px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .step-item { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; }
+    .step-circle {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      background: #dde4ed; color: #999;
+      font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s; z-index: 1;
+    }
+    .step-circle.active { background: #2d6a9f; color: white; box-shadow: 0 2px 8px rgba(45,106,159,0.4); }
+    .step-circle.done { background: #27ae60; color: white; }
+    .step-label { font-size: 8px; color: #999; margin-top: 3px; text-align: center; white-space: nowrap; }
+    .step-label.active { color: #2d6a9f; font-weight: 700; }
+    .step-label.done { color: #27ae60; }
+    .step-line { height: 2px; width: 16px; background: #dde4ed; margin-bottom: 14px; transition: background 0.3s; flex-shrink: 0; }
+    .step-line.done { background: #27ae60; }
+
+    /* カード */
+    .card { background: white; border-radius: 16px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 16px; display: none; }
+    .card.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .card.active { animation: fadeIn 0.25s ease; }
+    .card-title { font-size: 15px; font-weight: 700; color: #1a3a5c; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+    .card-title .badge { background: #2d6a9f; color: white; font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+
+    /* 現場名 */
+    .site-input {
+      width: 100%;
+      padding: 16px 14px;
+      border: 2px solid #dde4ed;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #1a3a5c;
+      outline: none;
+      transition: border-color 0.2s;
+      text-align: left;
+    }
+    .site-input:focus { border-color: #2d6a9f; box-shadow: 0 0 0 3px rgba(45,106,159,0.1); }
+    .site-input::placeholder { color: #bbb; font-weight: 400; }
+
+    /* 選択ボタン */
+    .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .option-btn {
+      background: #f5f8ff; border: 2px solid #dde4ed; border-radius: 12px;
+      padding: 14px 10px; font-size: 14px; font-weight: 600; color: #333;
+      cursor: pointer; transition: all 0.2s; text-align: center; line-height: 1.3;
+    }
+    .option-btn:active { transform: scale(0.97); }
+    .option-btn.selected { background: #eaf2ff; border-color: #2d6a9f; color: #2d6a9f; }
+    .option-btn.custom-btn { background: #fff8f0; border-color: #e0a857; color: #b07b20; grid-column: 1 / -1; }
+    .option-btn.custom-btn.selected { background: #fff3e0; border-color: #e08020; color: #c06010; }
+
+    /* テキスト入力 */
+    .custom-input-wrap { margin-top: 10px; display: none; }
+    .custom-input-wrap.show { display: block; }
+    .text-input { width: 100%; padding: 12px 14px; border: 2px solid #dde4ed; border-radius: 10px; font-size: 15px; color: #333; outline: none; transition: border-color 0.2s; }
+    .text-input:focus { border-color: #2d6a9f; }
+
+    /* 寸法 */
+    .dim-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .dim-label { font-size: 13px; font-weight: 600; color: #555; width: 46px; flex-shrink: 0; }
+    .dim-input { flex: 1; padding: 12px 10px; border: 2px solid #dde4ed; border-radius: 10px; font-size: 16px; color: #333; outline: none; transition: border-color 0.2s; text-align: right; min-width: 0; }
+    .dim-input:focus { border-color: #2d6a9f; }
+    .dim-unit { font-size: 13px; color: #666; width: 30px; flex-shrink: 0; }
+
+    /* 関連部材 */
+    .parts-section-title { font-size: 12px; font-weight: 700; color: #888; letter-spacing: 0.5px; margin-bottom: 10px; margin-top: 4px; }
+    .part-row { display: flex; align-items: center; padding: 10px 12px; border-radius: 10px; background: #f5f8ff; margin-bottom: 8px; gap: 10px; }
+    .part-name { flex: 1; font-size: 14px; font-weight: 600; color: #333; }
+    .part-qty-input { width: 72px; padding: 8px 10px; border: 2px solid #dde4ed; border-radius: 8px; font-size: 16px; color: #333; text-align: right; outline: none; transition: border-color 0.2s; }
+    .part-qty-input:focus { border-color: #2d6a9f; }
+    .part-unit { font-size: 13px; color: #666; width: 20px; flex-shrink: 0; }
+    .no-parts-msg { background: #f5f8ff; border-radius: 12px; padding: 20px; text-align: center; color: #888; font-size: 14px; }
+
+    /* 確認 */
+    .confirm-table { width: 100%; border-collapse: collapse; }
+    .confirm-table tr { border-bottom: 1px solid #f0f4f8; }
+    .confirm-table tr:last-child { border-bottom: none; }
+    .confirm-table th { text-align: left; padding: 10px 0; font-size: 12px; color: #888; font-weight: 600; width: 80px; vertical-align: top; }
+    .confirm-table td { padding: 10px 0; font-size: 14px; font-weight: 600; color: #222; }
+    .confirm-section-label { font-size: 11px; font-weight: 700; color: #2d6a9f; letter-spacing: 0.5px; margin-top: 14px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid #dde4ed; }
+
+    /* ボタン */
+    .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+    .btn { flex: 1; padding: 14px; border-radius: 12px; font-size: 15px; font-weight: 700; border: none; cursor: pointer; transition: all 0.2s; letter-spacing: 0.3px; }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: linear-gradient(135deg, #2d6a9f, #1a3a5c); color: white; box-shadow: 0 3px 10px rgba(45,106,159,0.3); }
+    .btn-primary:disabled { background: #aaa; box-shadow: none; cursor: not-allowed; }
+    .btn-secondary { background: #f0f4f8; color: #555; border: 2px solid #dde4ed; }
+    .btn-line { background: linear-gradient(135deg, #00c300, #00a000); color: white; box-shadow: 0 3px 10px rgba(0,195,0,0.3); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 16px; }
+    .btn-reset { background: #fff0f0; color: #c0392b; border: 2px solid #f5c6c6; }
+
+    .message-preview { background: #f5f8ff; border: 1px solid #c8d8f0; border-radius: 12px; padding: 14px; font-size: 13px; color: #333; white-space: pre-wrap; line-height: 1.7; margin-top: 8px; }
+    .message-preview-label { font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 600; letter-spacing: 0.5px; }
+    .color-swatch { width: 18px; height: 18px; border-radius: 50%; display: inline-block; margin-right: 5px; vertical-align: middle; border: 1px solid rgba(0,0,0,0.15); }
+
+    /* 履歴 */
+    .history-month {
+      margin-bottom: 16px;
+    }
+    .history-month-header {
+      display: flex; align-items: center; justify-content: space-between;
+      background: linear-gradient(135deg, #1a3a5c, #2d6a9f);
+      color: white; padding: 10px 14px; border-radius: 10px;
+      font-size: 14px; font-weight: 700; cursor: pointer; margin-bottom: 8px;
+    }
+    .history-month-header .count {
+      font-size: 11px; opacity: 0.85; font-weight: 400;
+    }
+    .history-entry {
+      background: #f5f8ff; border: 1px solid #dde4ed; border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 8px; position: relative;
+    }
+    .history-entry-title {
+      font-size: 14px; font-weight: 700; color: #1a3a5c; margin-bottom: 4px;
+    }
+    .history-entry-meta {
+      font-size: 12px; color: #666; line-height: 1.6;
+    }
+    .history-entry-date {
+      font-size: 11px; color: #aaa; margin-bottom: 6px;
+    }
+    .history-delete-btn {
+      position: absolute; top: 10px; right: 10px;
+      background: none; border: none; font-size: 16px; cursor: pointer; color: #ccc; padding: 2px 6px;
+    }
+    .history-delete-btn:hover { color: #c0392b; }
+    .history-empty {
+      text-align: center; color: #aaa; padding: 30px; font-size: 14px;
+    }
+
+    /* ガルテクト専用フォーム */
+    .galtech-color-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 12px; border: 2px solid #dde4ed; border-radius: 10px;
+      background: #f5f8ff; font-size: 12px; font-weight: 600; color: #333;
+      cursor: pointer; margin: 3px; transition: all 0.2s;
+    }
+    .galtech-color-btn:active { transform: scale(0.97); }
+    .galtech-color-btn.selected { border-color: #2d6a9f; background: #eaf2ff; color: #2d6a9f; }
+    .galtech-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+    .galtech-table thead th {
+      text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700;
+      color: #888; background: #f0f4f8; border-bottom: 2px solid #dde4ed;
+    }
+    .galtech-table thead th:last-child { width: 30px; }
+    .galtech-table tbody td {
+      padding: 7px 10px; border-bottom: 1px solid #f0f4f8; font-size: 13px; vertical-align: middle;
+    }
+    .galtech-table tbody tr.honbody-row td { background: #eaf2ff; font-weight: 700; color: #1a3a5c; }
+    .galtech-table tbody tr:last-child td { border-bottom: none; }
+    .galtech-qty-input {
+      width: 68px; padding: 6px 8px; border: 2px solid #dde4ed; border-radius: 8px;
+      font-size: 15px; color: #333; text-align: right; outline: none; transition: border-color 0.2s;
+    }
+    .galtech-qty-input:focus { border-color: #2d6a9f; }
+  </style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="icon">🏠</div>
+  <div style="flex:1">
+    <h1>屋根材 発注フォーム</h1>
+    <p>現場名・種類・メーカー・色・寸法・部材を選んでLINE発注</p>
+  </div>
+  <button onclick="toggleHistory()" id="historyToggleBtn"
+    style="background:rgba(255,255,255,0.18);border:1.5px solid rgba(255,255,255,0.4);border-radius:10px;color:white;padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0;line-height:1.3;text-align:center;">
+    📋<br>履歴
+  </button>
+</div>
+
+<!-- 注文履歴 -->
+<div id="cardHistory" style="display:none">
+  <div class="card active" style="margin-bottom:0">
+    <div class="card-title">
+      <span class="badge" style="background:#6c3483">📋 注文履歴</span>
+      <span style="flex:1"></span>
+      <button onclick="toggleHistory()" style="background:#f0f4f8;border:none;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;color:#555;cursor:pointer;">✕ 閉じる</button>
+    </div>
+    <div id="historyContent"></div>
+  </div>
+</div>
+
+<div id="formArea">
+<!-- ステッパー（7ステップ） -->
+<div class="stepper" id="stepper">
+  <div class="step-item">
+    <div class="step-circle active" id="sc1">1</div>
+    <div class="step-label active" id="sl1">現場名</div>
+  </div>
+  <div class="step-line" id="sline1"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc2">2</div>
+    <div class="step-label" id="sl2">種類</div>
+  </div>
+  <div class="step-line" id="sline2"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc3">3</div>
+    <div class="step-label" id="sl3">メーカー</div>
+  </div>
+  <div class="step-line" id="sline3"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc4">4</div>
+    <div class="step-label" id="sl4">色</div>
+  </div>
+  <div class="step-line" id="sline4"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc5">5</div>
+    <div class="step-label" id="sl5">寸法</div>
+  </div>
+  <div class="step-line" id="sline5"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc6">6</div>
+    <div class="step-label" id="sl6">部材</div>
+  </div>
+  <div class="step-line" id="sline6"></div>
+  <div class="step-item">
+    <div class="step-circle" id="sc7">7</div>
+    <div class="step-label" id="sl7">確認</div>
+  </div>
+</div>
+
+<!-- STEP 1: 現場名 -->
+<div class="card active" id="card1">
+  <div class="card-title">
+    <span class="badge">STEP 1</span> 現場名を入力
+  </div>
+  <input type="text" class="site-input" id="siteNameInput"
+    placeholder="例：○○様邸、△△アパート"
+    oninput="onSiteNameInput()"
+    autocomplete="off">
+  <div style="margin-top:12px; background:#f5f8ff; border-radius:10px; padding:12px; font-size:13px; color:#555;">
+    📍 発注メッセージの先頭に現場名が入ります
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="nextBtn1" onclick="nextStep(2)" disabled>次へ →</button>
+  </div>
+</div>
+
+<!-- STEP 2: 屋根材の種類 -->
+<div class="card" id="card2">
+  <div class="card-title">
+    <span class="badge">STEP 2</span> 屋根材の種類を選択
+  </div>
+  <div class="options-grid">
+    <button class="option-btn" onclick="selectOption('type','立平葺き',this)">立平葺き</button>
+    <button class="option-btn" onclick="selectOption('type','折板',this)">折板</button>
+    <button class="option-btn" onclick="selectOption('type','角波',this)">角波</button>
+    <button class="option-btn" onclick="selectOption('type','ガルテクト',this)">ガルテクト</button>
+    <button class="option-btn" onclick="selectOption('type','カラーベスト',this)">カラーベスト</button>
+    <button class="option-btn custom-btn" onclick="selectCustom('type',this,'customTypeWrap')">✏️ 直接入力</button>
+  </div>
+  <div class="custom-input-wrap" id="customTypeWrap">
+    <input type="text" class="text-input" id="customTypeInput" placeholder="屋根材の種類を入力してください" oninput="onCustomInput('type','customTypeInput')">
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevStep(1)">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtn2" onclick="nextFromType()" disabled>次へ →</button>
+  </div>
+</div>
+
+<!-- ガルテクト専用発注フォーム -->
+<div class="card" id="cardGaltech">
+  <div class="card-title">
+    <span class="badge" style="background:#2d8a5a">ガルテクト</span> 発注フォーム
+  </div>
+  <div id="galtechContainer"><!-- JSで動的生成 --></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="galtechBack()">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtnGaltech" onclick="galtechNext()" disabled>確認へ →</button>
+  </div>
+</div>
+
+<!-- STEP 3: メーカー選択 -->
+<div class="card" id="card3">
+  <div class="card-title">
+    <span class="badge">STEP 3</span> 鋼材メーカーを選択
+  </div>
+  <div class="options-grid">
+    <button class="option-btn" onclick="selectOption('maker','日鉄鋼板',this)">日鉄鋼板</button>
+    <button class="option-btn" onclick="selectOption('maker','JFE鋼板',this)">JFE鋼板</button>
+    <button class="option-btn" onclick="selectOption('maker','淀川製鋼所',this)">淀川製鋼所</button>
+    <button class="option-btn" onclick="selectOption('maker','大同鋼板',this)">大同鋼板</button>
+    <button class="option-btn" onclick="selectOption('maker','菊川工業',this)">菊川工業</button>
+    <button class="option-btn" onclick="selectOption('maker','中川製作所',this)">中川製作所</button>
+    <button class="option-btn custom-btn" onclick="selectCustom('maker',this,'customMakerWrap')">✏️ 直接入力</button>
+  </div>
+  <div class="custom-input-wrap" id="customMakerWrap">
+    <input type="text" class="text-input" id="customMakerInput" placeholder="メーカー名を入力してください" oninput="onCustomInput('maker','customMakerInput')">
+  </div>
+
+  <!-- 板厚選択（メーカー選択後に表示） -->
+  <div id="thicknessWrap" style="display:none;margin-top:16px;">
+    <div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:10px;padding-top:12px;border-top:1px solid #eee;">
+      📏 板厚を選択
+    </div>
+    <div class="options-grid" id="thicknessGrid">
+      <button class="option-btn thickness-btn" onclick="selectThickness('0.35',this)">0.35 mm</button>
+      <button class="option-btn thickness-btn" onclick="selectThickness('0.4',this)">0.4 mm</button>
+      <button class="option-btn thickness-btn" onclick="selectThickness('0.5',this)">0.5 mm</button>
+      <button class="option-btn thickness-btn" onclick="selectThickness('0.6',this)">0.6 mm</button>
+      <button class="option-btn thickness-btn" onclick="selectThickness('0.8',this)" style="grid-column:1/-1">0.8 mm</button>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevStep(2)">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtn3" onclick="nextStep(4)" disabled>次へ →</button>
+  </div>
+</div>
+
+<!-- STEP 4: 色選択（動的生成） -->
+<div class="card" id="card4">
+  <div class="card-title">
+    <span class="badge">STEP 4</span> 色を選択
+  </div>
+  <div id="colorContainer"><!-- JSで動的生成 --></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevFromColor()">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtn4" onclick="nextStep(5)" disabled>次へ →</button>
+  </div>
+</div>
+
+<!-- STEP 5: 寸法・数量（動的生成） -->
+<div class="card" id="card5">
+  <div class="card-title">
+    <span class="badge">STEP 5</span> <span id="step5Title">寸法と数量を入力</span>
+  </div>
+  <div id="dimContainer"><!-- JSで動的生成 --></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevStep(4)">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtn5" onclick="nextStep(6)" disabled>次へ →</button>
+  </div>
+</div>
+
+<!-- STEP 6: 関連部材 -->
+<div class="card" id="card6">
+  <div class="card-title">
+    <span class="badge">STEP 6</span> 関連部材の数量を入力
+  </div>
+  <div id="partsContainer"></div>
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevStep(5)">← 戻る</button>
+    <button class="btn btn-primary" id="nextBtn6" onclick="nextStep(7)">確認へ →</button>
+  </div>
+</div>
+
+<!-- STEP 7: 確認・発注 -->
+<div class="card" id="card7">
+  <div class="card-title">
+    <span class="badge" style="background:#27ae60">STEP 7</span> 注文内容の確認
+  </div>
+  <div class="confirm-section-label">▶ 現場</div>
+  <table class="confirm-table">
+    <tr><th>現場名</th><td id="conf-site">-</td></tr>
+  </table>
+  <div class="confirm-section-label">▶ 屋根材</div>
+  <table class="confirm-table">
+    <tr><th>種類</th><td id="conf-type">-</td></tr>
+    <tr id="conf-maker-row"><th>メーカー</th><td id="conf-maker">-</td></tr>
+    <tr id="conf-thickness-row"><th>板厚</th><td id="conf-thickness">-</td></tr>
+    <tr><th>色</th><td id="conf-color">-</td></tr>
+    <tr><th id="conf-dims-label">寸法・数量</th><td id="conf-dims">-</td></tr>
+  </table>
+  <div class="confirm-section-label" id="conf-parts-section" style="display:none">▶ 関連部材</div>
+  <table class="confirm-table" id="conf-parts-table"></table>
+
+  <div class="confirm-section-label">▶ 副資材</div>
+  <div style="display:flex;gap:10px;margin-bottom:8px;">
+    <button id="fukuYes" class="btn btn-secondary" style="flex:1;padding:12px;border-radius:10px;font-size:15px;font-weight:700;" onclick="setFukuzai(true)">✅ 必要</button>
+    <button id="fukuNo"  class="btn btn-secondary" style="flex:1;padding:12px;border-radius:10px;font-size:15px;font-weight:700;" onclick="setFukuzai(false)">❌ 不要</button>
+  </div>
+  <div id="fukuzaiInputWrap" style="display:none;margin-bottom:4px;">
+    <textarea id="fukuzaiMemo" rows="3"
+      style="width:100%;padding:12px 14px;border:2px solid #27ae60;border-radius:10px;font-size:14px;color:#333;outline:none;resize:vertical;line-height:1.6;"
+      placeholder="副資材の内容を入力してください（例：シーリング材、コーキング など）"
+      oninput="buildConfirm()"></textarea>
+  </div>
+
+  <div class="message-preview-label" style="margin-top:16px">📨 LINEに送信するメッセージ</div>
+  <div class="message-preview" id="messagePreview"></div>
+
+  <div class="btn-row">
+    <button class="btn btn-secondary" onclick="prevFromConfirm()">← 修正</button>
+    <button class="btn btn-line" onclick="sendToLine()">
+      <span style="font-size:22px;line-height:1">💬</span> LINEで発注
+    </button>
+  </div>
+  <div class="btn-row">
+    <button class="btn btn-reset" onclick="resetAll()">🔄 最初からやり直す</button>
+  </div>
+</div><!-- /card7 -->
+</div><!-- /formArea -->
+
+<script>
+  // ===== 色マスタ（メーカー別） =====
+  const COLORS_MASTER = {
+    'JFE鋼板': [
+      { name: 'Aライトキャメル KNC K003',    hex: '#c4a876' },
+      { name: 'Aマットホワイト KNC K005',    hex: '#e0dbd0' },
+      { name: 'オータムレッド KNC K021',      hex: '#7a2525' },
+      { name: 'Aミストホワイト KNC K001',    hex: '#b5bab5' },
+      { name: 'ブライトレッド KNC K025',      hex: '#aa2020' },
+      { name: 'ナチュラルグレー KNC K007',   hex: '#7a8070' },
+      { name: 'セピア KNC K033',              hex: '#4a3218' },
+      { name: 'ダークブラウン KNC K031',      hex: '#3a2010' },
+      { name: 'ライトブラック KNC K043',      hex: '#3a3a3a' },
+      { name: 'ジェットブラック KNC K041',   hex: '#1a1a1a' },
+      { name: 'Aスターゴールド KNC K055',    hex: '#b8a040' },
+      { name: 'グレーシルバー KNC K053',      hex: '#909090' },
+      { name: 'シルバーブラック KNC K045',   hex: '#484848' },
+      { name: 'バンブーグリーン KNC K011',   hex: '#388878' },
+      { name: 'モスグリーン KNC K013',        hex: '#3a4830' },
+      { name: 'マリンブルー KNC K015',        hex: '#1a4878' },
+      { name: 'ミッドナイトブルー KNC K017', hex: '#1a2848' },
+    ],
+    '日鉄鋼板': [
+      // ── SGL UNITE（エスジーエル ユナイト）全31色 ──
+      // 出典: https://www.niscs.nipponsteel.com/products/kohan/color/sgl_unite.html
+      // ── SGL UNITE つや消し ──
+      { name: 'ブラック NU201',           hex: '#2d3130', group: 'SGL UNITE つや消し' },
+      { name: 'パールブラック NU202',     hex: '#2d3130', group: 'SGL UNITE つや消し' },
+      { name: 'コゲチャ NU231',           hex: '#3b3a37', group: 'SGL UNITE つや消し' },
+      { name: 'モカブラウン NU232',       hex: '#524240', group: 'SGL UNITE つや消し' },
+      { name: 'レッドブラウン NU221',     hex: '#6a3d3f', group: 'SGL UNITE つや消し' },
+      { name: 'オレンジ NU241',           hex: '#ba6148', group: 'SGL UNITE つや消し' },
+      { name: 'ネイビーブルー NU211',     hex: '#263442', group: 'SGL UNITE つや消し' },
+      { name: 'モスグリーン NU251',       hex: '#3d524d', group: 'SGL UNITE つや消し' },
+      { name: 'ギングロ NU292',           hex: '#5d6763', group: 'SGL UNITE つや消し' },
+      { name: 'マットグレー NU271',       hex: '#768581', group: 'SGL UNITE つや消し' },
+      { name: 'ロクショウ NU252',         hex: '#48948c', group: 'SGL UNITE つや消し' },
+      { name: 'ゴールド NU293',           hex: '#9ea290', group: 'SGL UNITE つや消し' },
+      { name: 'グレージュ NU281',         hex: '#8d8f89', group: 'SGL UNITE つや消し' },
+      { name: 'マットシルバー NU291',     hex: '#a5afad', group: 'SGL UNITE つや消し' },
+      { name: 'ブルーメタリック NU294',   hex: '#97aba8', group: 'SGL UNITE つや消し' },
+      { name: 'コットンホワイト NU261',   hex: '#f8f7f2', group: 'SGL UNITE つや消し' },
+      // ── SGL UNITE つやあり ──
+      { name: 'メタリックブラウン NU297', hex: '#3b3e37', group: 'SGL UNITE つやあり' },
+      { name: 'ブルー NU212',             hex: '#00587b', group: 'SGL UNITE つやあり' },
+      { name: 'レッド NU222',             hex: '#6d231a', group: 'SGL UNITE つやあり' },
+      { name: 'グリーン NU253',           hex: '#114b35', group: 'SGL UNITE つやあり' },
+      { name: 'シルバーブラウン NU296',   hex: '#877b73', group: 'SGL UNITE つやあり' },
+      { name: 'グレー NU272',             hex: '#7f8f8b', group: 'SGL UNITE つやあり' },
+      { name: 'スモークピンク NU286',     hex: '#b79d90', group: 'SGL UNITE つやあり' },
+      { name: 'ウグイス NU254',           hex: '#8bb09a', group: 'SGL UNITE つやあり' },
+      { name: 'アッシュグレー NU273',     hex: '#a7a8a8', group: 'SGL UNITE つやあり' },
+      { name: 'シルバー NU295',           hex: '#b9b9b9', group: 'SGL UNITE つやあり' },
+      { name: 'ベージュ NU282',           hex: '#d4c9ab', group: 'SGL UNITE つやあり' },
+      { name: 'アイボリーホワイト NU283', hex: '#d8dbc7', group: 'SGL UNITE つやあり' },
+      { name: 'クリーム NU284',           hex: '#f4ebd3', group: 'SGL UNITE つやあり' },
+      { name: 'サンドホワイト NU285',     hex: '#cdcec6', group: 'SGL UNITE つやあり' },
+      { name: 'ホワイト NU262',           hex: '#f8faf8', group: 'SGL UNITE つやあり' },
+    ],
+    'カラーベスト': [
+      { name: 'ネオ・ブラック CC262K',       hex: '#252525' },
+      { name: 'パール・グレイ CC275K',       hex: '#484848' },
+      { name: 'シルバー・ホワイト CC225K',   hex: '#d8d8d8' },
+      { name: 'ココナッツ・ブラウン CC221K', hex: '#2a1e14' },
+      { name: 'ウェザード・グリーン CC277K', hex: '#2a3828' },
+      { name: 'ミッドナイト・ブルー CC226K', hex: '#1e2838' },
+    ],
+    'ガルテクト': [
+      { name: 'Sシェイドブラック GT3-706',    hex: '#2a2a2a' },
+      { name: 'Sシェイドブルー GT3-707',      hex: '#2a3848' },
+      { name: 'Sシェイドブラウン GT3-708',    hex: '#6a5040' },
+      { name: 'Sシェイドモスグリーン GT3-710',hex: '#3a4830' },
+      { name: 'Sシェイドチャコール GT3-711',  hex: '#404040' },
+    ],
+  };
+
+  // 汎用カラー（メーカー固有色なし）
+  const GENERIC_COLORS = [
+    { name: 'チャコールグレー', hex: '#555' },
+    { name: 'ブラック',         hex: '#222' },
+    { name: 'ダークブラウン',   hex: '#5a3a1a' },
+    { name: 'ブルー',           hex: '#2255aa' },
+    { name: 'グリーン',         hex: '#2a7a3a' },
+    { name: 'ブラウン',         hex: '#8b5e3c' },
+    { name: 'レッド',           hex: '#c0392b' },
+    { name: 'ライトグレー',     hex: '#bbb' },
+  ];
+
+  // ===== 色ステップ動的構築 =====
+  function buildColorStep() {
+    const container = document.getElementById('colorContainer');
+    order.color = '';
+    document.getElementById('nextBtn4').disabled = true;
+
+    // 優先順：①タイプ×メーカーの組み合わせ → ②タイプ固有 → ③メーカー固有 → ④汎用
+    const comboKey = order.type + '_' + order.maker;
+    const colors = COLORS_MASTER[comboKey]
+                || COLORS_MASTER[order.type]
+                || COLORS_MASTER[order.maker]
+                || null;
+    const colorSource = COLORS_MASTER[comboKey]  ? order.type + ' × ' + order.maker
+                      : COLORS_MASTER[order.type] ? order.type
+                      : COLORS_MASTER[order.maker] ? order.maker
+                      : null;
+    const isMakerSpecific = !!colors;
+    const list = colors || GENERIC_COLORS;
+
+    let html = '';
+    if (isMakerSpecific) {
+      html += `<div style="font-size:12px;font-weight:700;color:#2d6a9f;margin-bottom:12px;padding:6px 10px;background:#eaf2ff;border-radius:8px;">🎨 ${colorSource} カラーラインナップ</div>`;
+      // グループ別に分けて表示
+      const groups = [];
+      list.forEach(c => {
+        const g = c.group || '';
+        if (!groups.includes(g)) groups.push(g);
+      });
+      groups.forEach(g => {
+        if (g) html += `<div style="font-size:11px;font-weight:700;color:#888;letter-spacing:0.5px;margin:12px 0 6px;padding-bottom:4px;border-bottom:1px solid #eee;">◆ ${g}</div>`;
+        html += '<div class="options-grid">';
+        list.filter(c => (c.group || '') === g).forEach(c => {
+          const safeName = c.name.replace(/'/g, "\\'");
+          html += `<button class="option-btn color-opt" onclick="selectColorBtn('${safeName}',this)" style="display:flex;align-items:center;gap:6px;justify-content:flex-start;font-size:12px;padding:9px 10px;">
+            <span class="color-swatch" style="background:${c.hex};width:22px;height:22px;flex-shrink:0;border:1px solid rgba(0,0,0,0.15)"></span>
+            <span style="text-align:left;line-height:1.3">${c.name}</span>
+          </button>`;
+        });
+        html += '</div>';
+      });
+    } else {
+      html += '<div class="options-grid">';
+      list.forEach(c => {
+        const safeName = c.name.replace(/'/g, "\\'");
+        html += `<button class="option-btn color-opt" onclick="selectColorBtn('${safeName}',this)" style="display:flex;align-items:center;gap:6px;justify-content:flex-start;font-size:13px;padding:10px 10px;">
+          <span class="color-swatch" style="background:${c.hex};width:22px;height:22px;flex-shrink:0;"></span>
+          <span style="text-align:left;line-height:1.3">${c.name}</span>
+        </button>`;
+      });
+      html += '</div>';
+    }
+    html += `<div style="margin-top:10px"><button class="option-btn custom-btn" onclick="selectColorCustom(this)" style="width:100%">✏️ 直接入力</button></div>
+    <div class="custom-input-wrap" id="customColorWrap">
+      <input type="text" class="text-input" id="customColorInput" placeholder="色名を入力してください" oninput="onCustomColorInput()">
+    </div>`;
+    container.innerHTML = html;
+  }
+
+  function selectColorBtn(value, btn) {
+    order.color = value;
+    document.querySelectorAll('#colorContainer .color-opt, #colorContainer .custom-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const wrap = document.getElementById('customColorWrap');
+    if (wrap) wrap.classList.remove('show');
+    document.getElementById('nextBtn4').disabled = false;
+  }
+
+  function selectColorCustom(btn) {
+    document.querySelectorAll('#colorContainer .color-opt, #colorContainer .custom-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const wrap = document.getElementById('customColorWrap');
+    if (wrap) wrap.classList.add('show');
+    order.color = '';
+    document.getElementById('nextBtn4').disabled = true;
+    setTimeout(() => document.getElementById('customColorInput')?.focus(), 100);
+  }
+
+  function onCustomColorInput() {
+    order.color = document.getElementById('customColorInput').value.trim();
+    document.getElementById('nextBtn4').disabled = !order.color;
+  }
+
+  // ===== 関連部材マスタ =====
+  const PARTS_MASTER = {
+    '立平葺き': ['サンバナ','換気棟１P','換気棟２P','換気雨押え１P','換気雨押え２P','片棟換気１P','片棟換気２P','ヌキ'],
+    '折板': ['タイトフレーム','水止面戸','エプロン面戸','見切面戸'],
+    '角波': ['石膏ボード12.5','石膏ボード9.6'],
+    'カラーベスト': ['スターター','軒先水切','ケラバ','逆ケラバ','雨押え','棟','谷','換気棟１P','換気棟２P','換気雨押え１P','換気雨押え２P','片棟換気１P','片棟換気２P','ヌキ'],
+    'ガルテクト': ['改修用唐草D','改修用唐草SB','改修用一体唐草16','改修用一体唐草29','唐草G50','ケラバ水切','ケラバ水切エンド','ケラバ水切100エンド（左）','改修用ケラバ水切100','ケラバ水切100エンド（右）','棟・隅棟包みD','棟巴','差し棟キャップD3寸','差し棟下地N','差し棟キャップD5寸','斜先','斜先120','谷樋D（Ⅱ）','改修用谷止縁','改修用壁押えD（Ⅱ）','壁押えD（Ⅱ）','改修用壁押えカバー','換気棟','換気棟用エンドキャップ','換気棟L','片流れ用棟包み','片流れ換気用水切','片流れ用換気棟','C型捨板','L型捨板']
+  };
+
+  const order = { siteName: '', type: '', maker: '', thickness: '', color: '' };
+  let currentRowCount = 1;
+  let partsQty = {};
+  let fukuzaiNeeded = null; // true=必要, false=不要, null=未選択
+  // ガルテクト専用データ
+  let galtechColor = '';
+  let galtechQty = {};
+
+  // メーカー選択が不要な屋根材タイプ
+  const NO_MAKER_TYPES = ['ガルテクト', 'カラーベスト'];
+
+  // ===== 現場名 =====
+  function onSiteNameInput() {
+    order.siteName = document.getElementById('siteNameInput').value.trim();
+    document.getElementById('nextBtn1').disabled = !order.siteName;
+  }
+
+  // ===== オプション選択 =====
+  function selectOption(key, value, btn) {
+    order[key] = value;
+    const parent = btn.closest('.options-grid');
+    parent.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    const wrapId = {type:'customTypeWrap', maker:'customMakerWrap', color:'customColorWrap'}[key];
+    if (wrapId) document.getElementById(wrapId).classList.remove('show');
+    updateNextBtn(key);
+  }
+
+  function selectCustom(key, btn, wrapId) {
+    const parent = btn.closest('.options-grid');
+    parent.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById(wrapId).classList.add('show');
+    order[key] = '';
+    const inputId = {customTypeWrap:'customTypeInput', customMakerWrap:'customMakerInput', customColorWrap:'customColorInput'}[wrapId];
+    setTimeout(() => document.getElementById(inputId).focus(), 100);
+    updateNextBtn(key);
+  }
+
+  function onCustomInput(key, inputId) {
+    order[key] = document.getElementById(inputId).value.trim();
+    updateNextBtn(key);
+  }
+
+  function updateNextBtn(key) {
+    const btnMap = {type:'nextBtn2', maker:'nextBtn3', color:'nextBtn4'};
+    const btn = document.getElementById(btnMap[key]);
+    if (!btn) return;
+    if (key === 'maker') {
+      // メーカーが選ばれたら板厚エリアを表示
+      const wrap = document.getElementById('thicknessWrap');
+      if (order.maker) {
+        wrap.style.display = '';
+      } else {
+        wrap.style.display = 'none';
+        order.thickness = '';
+        document.querySelectorAll('.thickness-btn').forEach(b => b.classList.remove('selected'));
+      }
+      // メーカーと板厚の両方が揃ったら次へ有効
+      btn.disabled = !(order.maker && order.thickness);
+    } else {
+      btn.disabled = !order[key];
+    }
+  }
+
+  function selectThickness(value, btn) {
+    order.thickness = value;
+    document.querySelectorAll('#thicknessGrid .thickness-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('nextBtn3').disabled = !(order.maker && order.thickness);
+  }
+
+  // 定尺タイプ（数量のみ）
+  const FIXED_SIZE_TYPES = ['ガルテクト', 'カラーベスト'];
+
+  // 梱包マスタ（1束あたりの枚数）
+  const BUNDLE_SIZE = { 'カラーベスト': 8, 'ガルテクト': 6 };
+
+  // 必要枚数から梱包数を計算（端数は1束に切り上げ）
+  function calcBundles(type, qty) {
+    const per = BUNDLE_SIZE[type];
+    if (!per || !(qty > 0)) return null;
+    const bundles = Math.ceil(qty / per);
+    const total   = bundles * per;
+    return { per, bundles, total, surplus: total - qty };
+  }
+
+  // ===== 寸法ステップ動的構築 =====
+  function buildDimStep() {
+    const container = document.getElementById('dimContainer');
+    const isFixed = FIXED_SIZE_TYPES.includes(order.type);
+    document.getElementById('nextBtn5').disabled = false; // 本体なし（部材のみ）も可
+    currentRowCount = 1;
+
+    if (isFixed) {
+      document.getElementById('step5Title').textContent = '数量を入力';
+      container.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#f5f8ff;border-radius:12px;border:2px solid #dde4ed;">
+          <div style="font-size:14px;font-weight:700;color:#333;flex:1">数量</div>
+          <input type="number" id="fixedQty" class="dim-input"
+            placeholder="0" step="1" min="0"
+            style="max-width:100px;font-size:20px;font-weight:700;text-align:center;"
+            oninput="updateFixedQty()">
+          <div style="font-size:15px;color:#555;font-weight:600">枚</div>
+        </div>
+        <div id="bundleInfo" style="display:none;margin-top:10px;"></div>
+        <div style="background:#f5f8ff;border-radius:10px;padding:12px;font-size:13px;color:#555;margin-top:10px;line-height:1.6">
+          💡 本体が不要なときは空欄のまま「次へ」を押すと、役物（部材）だけ発注できます
+        </div>`;
+    } else {
+      document.getElementById('step5Title').textContent = '寸法と数量を入力';
+      let rows = '';
+      const labels = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮'];
+      labels.forEach((l, i) => {
+        const n = i + 1;
+        rows += `<div class="dim-row" id="lenRow${n}" ${n > 1 ? 'style="display:none"' : ''}>
+          <div class="dim-label">長さ${l}</div>
+          <input type="number" class="dim-input" id="len${n}" placeholder="0" step="1" min="0" oninput="updateDimSummary()">
+          <div class="dim-unit">mm</div>
+          <input type="number" class="dim-input" id="qty${n}" placeholder="0" step="1" min="0" style="max-width:68px" oninput="updateDimSummary()">
+          <div class="dim-unit">枚</div>
+        </div>`;
+      });
+      container.innerHTML = `
+        <div id="lengthRows">${rows}</div>
+        <div style="display:flex;gap:8px;margin-top:4px;margin-bottom:16px;">
+          <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px;border-radius:8px;" onclick="addLengthRow()" id="addRowBtn">＋ サイズを追加</button>
+          <button class="btn btn-secondary" style="flex:none;padding:8px 14px;font-size:13px;border-radius:8px;color:#c0392b;border-color:#f5c6c6;display:none" onclick="removeLengthRow()" id="removeRowBtn">－ 削除</button>
+        </div>
+        <div style="background:#f5f8ff;border-radius:10px;padding:12px;font-size:13px;color:#555;">
+          💡 長さはミリメートル（mm）で入力してください。複数の長さがある場合は「サイズを追加」で行を増やせます<br>
+          💡 本体が不要なときは空欄のまま「次へ」を押すと、役物（部材）だけ発注できます
+        </div>`;
+    }
+  }
+
+  function updateFixedQty() {
+    const qty = parseInt(document.getElementById('fixedQty')?.value || 0);
+    renderBundleInfo(qty);
+  }
+
+  // 梱包数の表示ボックス（カラーベスト・ガルテクト共通）
+  function bundleBoxHtml(b, qty) {
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:14px;background:#eaf2ff;border:2px solid #2d6a9f;border-radius:12px;">
+        <div style="font-size:13px;font-weight:700;color:#1a3a5c;flex:1">梱包数<br>
+          <span style="font-size:11px;font-weight:400;color:#555">${b.per}枚入り／束</span>
+        </div>
+        <div style="font-size:26px;font-weight:700;color:#2d6a9f;line-height:1">${b.bundles}</div>
+        <div style="font-size:15px;color:#1a3a5c;font-weight:700">束</div>
+      </div>
+      <div style="margin-top:8px;font-size:13px;color:#555;background:#f5f8ff;border-radius:10px;padding:10px 12px;line-height:1.6">
+        ${b.bundles}束 ＝ ${b.total}枚${b.surplus > 0
+          ? `<br><span style="color:#b07b20;font-weight:700">※ 必要${qty}枚に対して${b.surplus}枚多くなります</span>`
+          : `<br><span style="color:#27ae60;font-weight:700">※ ちょうど${qty}枚です</span>`}
+      </div>`;
+  }
+
+  // 数量を「20枚 ＝ 4束（6枚入り／計24枚）」の形にする
+  function qtyWithBundles(type, qty) {
+    const b = calcBundles(type, qty);
+    return b ? qty + '枚 ＝ ' + b.bundles + '束（' + b.per + '枚入り／計' + b.total + '枚）'
+             : qty + '枚';
+  }
+
+  function renderBundleInfo(qty) {
+    const box = document.getElementById('bundleInfo');
+    if (!box) return;
+    const b = calcBundles(order.type, qty);
+    if (!b) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = '';
+    box.innerHTML = bundleBoxHtml(b, qty);
+  }
+
+  function updateDimSummary() {
+    // 本体なし（部材のみ）の発注も許可するため、入力の有無で次へを止めない
+  }
+
+  function addLengthRow() {
+    if (currentRowCount >= 15) return;
+    currentRowCount++;
+    document.getElementById('lenRow'+currentRowCount).style.display = 'flex';
+    if (currentRowCount >= 15) document.getElementById('addRowBtn').disabled = true;
+    document.getElementById('removeRowBtn').style.display = '';
+  }
+
+  function removeLengthRow() {
+    if (currentRowCount <= 1) return;
+    document.getElementById('len'+currentRowCount).value = '';
+    document.getElementById('qty'+currentRowCount).value = '';
+    document.getElementById('lenRow'+currentRowCount).style.display = 'none';
+    currentRowCount--;
+    if (currentRowCount < 15) document.getElementById('addRowBtn').disabled = false;
+    if (currentRowCount <= 1) document.getElementById('removeRowBtn').style.display = 'none';
+    updateDimSummary();
+  }
+
+  // ===== 関連部材 =====
+  function buildPartsStep() {
+    const container = document.getElementById('partsContainer');
+    const parts = PARTS_MASTER[order.type];
+    partsQty = {};
+
+    if (!parts || parts.length === 0) {
+      container.innerHTML = `
+        <div class="no-parts-msg">
+          <div style="font-size:32px;margin-bottom:8px">📦</div>
+          <div style="font-weight:700;margin-bottom:4px">${order.type}</div>
+          <div style="color:#aaa;font-size:13px">この屋根材に関連する部材はありません</div>
+        </div>`;
+      return;
+    }
+
+    let html = `<div class="parts-section-title">${order.type} の関連部材（0は不要）</div>`;
+    parts.forEach(name => {
+      partsQty[name] = 0;
+      const safeId = 'part_' + name.replace(/[^a-zA-Z0-9\u3040-\u9fff]/g, '_');
+      html += `
+        <div class="part-row">
+          <div class="part-name">${name}</div>
+          <input type="number" class="part-qty-input" id="${safeId}"
+            placeholder="0" step="1" min="0" value=""
+            oninput="partsQty['${name.replace(/'/g,"\\'")}'] = parseInt(this.value)||0">
+          <div class="part-unit">個</div>
+        </div>`;
+    });
+    html += `<div style="background:#f5f8ff;border-radius:10px;padding:12px;font-size:13px;color:#555;margin-top:8px">
+      💡 不要な部材は空欄または0のままでOKです
+    </div>`;
+    container.innerHTML = html;
+  }
+
+  // ===== ガルテクト専用フォーム =====
+  function buildGaltechForm() {
+    galtechColor = '';
+    galtechQty = {};
+    document.getElementById('nextBtnGaltech').disabled = true;
+    const colors = COLORS_MASTER['ガルテクト'];
+    const parts  = PARTS_MASTER['ガルテクト'];
+
+    // 色選択ボタン
+    let colorBtns = '';
+    colors.forEach(c => {
+      const safeName = c.name.replace(/'/g, "\\'");
+      colorBtns += `<button class="galtech-color-btn" onclick="selectGaltechColor('${safeName}','${c.hex}',this)">
+        <span style="width:18px;height:18px;border-radius:50%;background:${c.hex};border:1px solid rgba(0,0,0,0.15);flex-shrink:0;display:inline-block"></span>
+        ${c.name}
+      </button>`;
+    });
+
+    // 部材テーブル行
+    let rows = `<tr class="honbody-row">
+      <td>本体</td>
+      <td style="text-align:right"><input type="number" class="galtech-qty-input" id="galtech_honbody"
+        placeholder="0" step="1" min="0" oninput="updateGaltechQty()"></td>
+      <td style="font-size:12px;color:#888">枚</td>
+    </tr>
+    <tr id="galtechBundleRow" style="display:none">
+      <td colspan="3" style="padding:10px 0 4px"><div id="galtechBundleInfo"></div></td>
+    </tr>`;
+    parts.forEach(name => {
+      galtechQty[name] = 0;
+      const safeId  = 'galtech_' + name.replace(/[^a-zA-Z0-9\u3040-\u9fff]/g, '_');
+      const safeName = name.replace(/'/g, "\\'");
+      rows += `<tr>
+        <td>${name}</td>
+        <td style="text-align:right"><input type="number" class="galtech-qty-input" id="${safeId}"
+          placeholder="0" step="1" min="0"
+          oninput="galtechQty['${safeName}'] = parseInt(this.value)||0; updateGaltechQty()"></td>
+        <td style="font-size:12px;color:#888">個</td>
+      </tr>`;
+    });
+
+    document.getElementById('galtechContainer').innerHTML = `
+      <div style="background:#eaf2ff;border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:10px">🎨 色を選択</div>
+        <div id="galtechColorBtns" style="display:flex;flex-wrap:wrap;">${colorBtns}</div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:#1a3a5c;margin-bottom:10px">📋 数量を入力（不要は0または空欄）</div>
+      <table class="galtech-table">
+        <thead><tr><th>部材名</th><th style="text-align:right">数量</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div style="background:#f5f8ff;border-radius:10px;padding:12px;font-size:13px;color:#555;margin-top:12px;line-height:1.6">
+        💡 本体の色と数量を入力してください。関連部材は必要なものだけ入力してください<br>
+        💡 本体が不要なときは本体を空欄にすれば、役物（部材）だけ発注できます
+      </div>`;
+  }
+
+  function selectGaltechColor(name, hex, btn) {
+    galtechColor = name;
+    order.color  = name;
+    document.querySelectorAll('#galtechColorBtns .galtech-color-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    updateGaltechQty();
+  }
+
+  function updateGaltechQty() {
+    const honbodyQty = parseInt(document.getElementById('galtech_honbody')?.value || 0);
+    const hasParts = Object.values(galtechQty).some(v => v > 0);
+    // 本体なし（役物のみ）でも進めるが、色と「何か1つ」は必要
+    document.getElementById('nextBtnGaltech').disabled = !(galtechColor && (honbodyQty > 0 || hasParts));
+    const row = document.getElementById('galtechBundleRow');
+    const box = document.getElementById('galtechBundleInfo');
+    if (!row || !box) return;
+    const b = calcBundles('ガルテクト', honbodyQty);
+    if (!b) { row.style.display = 'none'; box.innerHTML = ''; return; }
+    row.style.display = '';
+    box.innerHTML = bundleBoxHtml(b, honbodyQty);
+  }
+
+  function galtechBack() {
+    showCard(2);
+    updateStepper(2);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  function galtechNext() {
+    // 部材の数量を収集
+    const parts = PARTS_MASTER['ガルテクト'];
+    parts.forEach(name => {
+      const safeId = 'galtech_' + name.replace(/[^a-zA-Z0-9\u3040-\u9fff]/g, '_');
+      galtechQty[name] = parseInt(document.getElementById(safeId)?.value || 0);
+    });
+    buildConfirm();
+    showCard(7);
+    updateStepper(7);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  // ===== STEP2→色へのスマートナビゲーション =====
+  // メーカー不要の屋根材に切り替えたとき、前に選んだメーカー・板厚を持ち越さない
+  function clearMakerAndThickness() {
+    order.maker = '';
+    order.thickness = '';
+    const wrap = document.getElementById('thicknessWrap');
+    if (wrap) wrap.style.display = 'none';
+    document.querySelectorAll('.thickness-btn').forEach(b => b.classList.remove('selected'));
+    document.querySelectorAll('#card3 .option-btn').forEach(b => b.classList.remove('selected'));
+    const cWrap = document.getElementById('customMakerWrap');
+    if (cWrap) cWrap.classList.remove('show');
+    const cInput = document.getElementById('customMakerInput');
+    if (cInput) cInput.value = '';
+    const btn3 = document.getElementById('nextBtn3');
+    if (btn3) btn3.disabled = true;
+  }
+
+  function nextFromType() {
+    if (order.type === 'ガルテクト') {
+      clearMakerAndThickness();
+      buildGaltechForm();
+      showCard('galtech');
+      updateStepper('galtech');
+      window.scrollTo({top: 0, behavior: 'smooth'});
+    } else if (NO_MAKER_TYPES.includes(order.type)) {
+      clearMakerAndThickness(); // メーカー・板厚とも不要
+      nextStep(4);              // STEP3スキップ
+    } else {
+      nextStep(3);
+    }
+  }
+
+  function prevFromColor() {
+    if (NO_MAKER_TYPES.includes(order.type)) {
+      prevStep(2);      // STEP3スキップして種類へ
+    } else {
+      prevStep(3);
+    }
+  }
+
+  // ===== ステップ移動 =====
+  function nextStep(step) {
+    if (step === 4) buildColorStep();
+    if (step === 5) buildDimStep();
+    if (step === 6) buildPartsStep();
+    if (step === 7) buildConfirm();
+    showCard(step);
+    updateStepper(step);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  function prevStep(step) {
+    showCard(step);
+    updateStepper(step);
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  function showCard(step) {
+    for (let i = 1; i <= 7; i++) {
+      document.getElementById('card'+i).classList.remove('active');
+    }
+    document.getElementById('cardGaltech').classList.remove('active');
+    if (step === 'galtech') {
+      document.getElementById('cardGaltech').classList.add('active');
+    } else {
+      document.getElementById('card'+step).classList.add('active');
+    }
+  }
+
+  function updateStepper(step) {
+    const isGaltech = order.type === 'ガルテクト';
+    const skipMaker = !isGaltech && NO_MAKER_TYPES.includes(order.type);
+    // galtech card は step 2 と 7 の間に位置する（2.5として扱う）
+    const displayStep = (step === 'galtech') ? 2.5 : step;
+
+    for (let i = 1; i <= 7; i++) {
+      const sc = document.getElementById('sc'+i);
+      const sl = document.getElementById('sl'+i);
+      sc.className = 'step-circle';
+      sl.className = 'step-label';
+      sc.style.opacity = '';
+      sl.style.opacity = '';
+
+      // ガルテクト：STEP3〜6をスキップ（常に）
+      if (isGaltech && i >= 3 && i <= 6) {
+        sc.innerHTML = '–';
+        sc.style.opacity = '0.35';
+        sl.style.opacity = '0.35';
+        continue;
+      }
+      // カラーベスト等：STEP3をスキップ（STEP4以降）
+      if (skipMaker && i === 3 && displayStep >= 4) {
+        sc.innerHTML = '–';
+        sc.style.opacity = '0.35';
+        sl.style.opacity = '0.35';
+        continue;
+      }
+
+      if (i < displayStep) {
+        sc.classList.add('done'); sc.innerHTML = '✓'; sl.classList.add('done');
+      } else if (i === displayStep) {
+        sc.classList.add('active'); sc.innerHTML = i; sl.classList.add('active');
+      } else {
+        sc.innerHTML = i;
+      }
+    }
+    for (let i = 1; i <= 6; i++) {
+      const line = document.getElementById('sline'+i);
+      line.className = 'step-line' + (i < displayStep ? ' done' : '');
+    }
+  }
+
+  // ===== 副資材 =====
+  function setFukuzai(needed) {
+    fukuzaiNeeded = needed;
+    const yesBtn = document.getElementById('fukuYes');
+    const noBtn  = document.getElementById('fukuNo');
+    yesBtn.style.background = needed  ? '#27ae60' : '';
+    yesBtn.style.color      = needed  ? 'white'   : '';
+    yesBtn.style.borderColor= needed  ? '#27ae60' : '';
+    noBtn.style.background  = !needed ? '#c0392b' : '';
+    noBtn.style.color       = !needed ? 'white'   : '';
+    noBtn.style.borderColor = !needed ? '#c0392b' : '';
+    // 必要な場合のみメモ欄を表示
+    const wrap = document.getElementById('fukuzaiInputWrap');
+    wrap.style.display = needed ? '' : 'none';
+    if (!needed) document.getElementById('fukuzaiMemo').value = '';
+    buildConfirm(); // メッセージを再生成
+  }
+
+  // ===== 確認画面 =====
+  function buildConfirm() {
+    const isGaltech = order.type === 'ガルテクト';
+    document.getElementById('conf-site').textContent = order.siteName;
+    document.getElementById('conf-type').textContent = order.type;
+    const makerRow = document.getElementById('conf-maker-row');
+    const thicknessRow = document.getElementById('conf-thickness-row');
+    if (order.maker) {
+      document.getElementById('conf-maker').textContent = order.maker;
+      if (makerRow) makerRow.style.display = '';
+    } else {
+      if (makerRow) makerRow.style.display = 'none';
+    }
+    if (order.thickness) {
+      document.getElementById('conf-thickness').textContent = order.thickness + ' mm';
+      if (thicknessRow) thicknessRow.style.display = '';
+    } else {
+      if (thicknessRow) thicknessRow.style.display = 'none';
+    }
+    document.getElementById('conf-color').textContent = order.color;
+
+    let dimLines = [];
+    if (isGaltech) {
+      const qty = parseInt(document.getElementById('galtech_honbody')?.value || 0);
+      if (qty > 0) dimLines.push(qtyWithBundles('ガルテクト', qty));
+      document.getElementById('conf-dims-label').textContent = '数量';
+    } else {
+      const isFixed = FIXED_SIZE_TYPES.includes(order.type);
+      if (isFixed) {
+        const qty = parseInt(document.getElementById('fixedQty')?.value || 0);
+        if (qty > 0) dimLines.push(qtyWithBundles(order.type, qty));
+        document.getElementById('conf-dims-label').textContent = '数量';
+      } else {
+        document.getElementById('conf-dims-label').textContent = '寸法・数量';
+        for (let i = 1; i <= currentRowCount; i++) {
+          const len = parseFloat(document.getElementById('len'+i)?.value || 0);
+          const qty = parseInt(document.getElementById('qty'+i)?.value || 0);
+          if (len > 0 && qty > 0) dimLines.push(len + 'mm × ' + qty + '枚');
+        }
+      }
+    }
+    document.getElementById('conf-dims').textContent = dimLines.join('、') || '本体なし（役物のみ）';
+
+    const partsSection = document.getElementById('conf-parts-section');
+    const partsTable  = document.getElementById('conf-parts-table');
+    let activeParts = [];
+    if (isGaltech) {
+      const parts = PARTS_MASTER['ガルテクト'];
+      activeParts = parts.filter(n => (galtechQty[n] || 0) > 0);
+      if (activeParts.length > 0) {
+        partsSection.style.display = '';
+        partsTable.innerHTML = activeParts.map(n => `<tr><th>${n}</th><td>${galtechQty[n]} 個</td></tr>`).join('');
+      } else {
+        partsSection.style.display = 'none';
+        partsTable.innerHTML = '';
+      }
+    } else {
+      const parts = PARTS_MASTER[order.type];
+      activeParts = parts ? parts.filter(n => partsQty[n] > 0) : [];
+      if (activeParts.length > 0) {
+        partsSection.style.display = '';
+        partsTable.innerHTML = activeParts.map(n => `<tr><th>${n}</th><td>${partsQty[n]} 個</td></tr>`).join('');
+      } else {
+        partsSection.style.display = 'none';
+        partsTable.innerHTML = '';
+      }
+    }
+
+    // LINEメッセージ
+    const today = new Date();
+    const dateStr = today.getFullYear() + '/' + (today.getMonth()+1) + '/' + today.getDate();
+    let msg = '【屋根材 発注】\n';
+    msg += '現場名：' + order.siteName + '\n';
+    msg += '─────────────\n';
+    msg += '種類：' + order.type + '\n';
+    if (order.thickness) msg += '板厚：' + order.thickness + 'mm\n';
+    msg += '色：' + order.color + '\n';
+    msg += '─────────────\n';
+    if (isGaltech) {
+      const honbodyQty = parseInt(document.getElementById('galtech_honbody')?.value || 0);
+      msg += honbodyQty > 0 ? '　本体 ' + qtyWithBundles('ガルテクト', honbodyQty) + '\n'
+                            : '　本体なし（役物のみ）\n';
+    } else if (dimLines.length > 0) {
+      dimLines.forEach(d => { msg += '　' + d + '\n'; });
+    } else {
+      msg += '　本体なし（役物のみ）\n';
+    }
+    if (activeParts.length > 0) {
+      msg += '─────────────\n';
+      msg += '【関連部材】\n';
+      if (isGaltech) {
+        activeParts.forEach(n => { msg += '　' + n + '：' + galtechQty[n] + '個\n'; });
+      } else {
+        activeParts.forEach(n => { msg += '　' + n + '：' + partsQty[n] + '個\n'; });
+      }
+    }
+    msg += '─────────────\n';
+    if (fukuzaiNeeded === true) {
+      const memo = document.getElementById('fukuzaiMemo')?.value.trim();
+      msg += '副資材：必要\n';
+      if (memo) msg += '　' + memo.split('\n').join('\n　') + '\n';
+    }
+    if (fukuzaiNeeded === false) msg += '副資材：不要\n';
+    msg += '発注日：' + dateStr;
+    document.getElementById('messagePreview').textContent = msg;
+  }
+
+  // ===== 確認から戻る =====
+  function prevFromConfirm() {
+    if (order.type === 'ガルテクト') {
+      showCard('galtech');
+      updateStepper('galtech');
+    } else {
+      prevStep(6);
+    }
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  }
+
+  // ===== LINE送信 =====
+  function sendToLine() {
+    if (!hasAnythingToOrder()) {
+      alert('発注する内容がありません。\n本体の数量か、役物（部材）の数量のどちらかを入力してください。');
+      return;
+    }
+    const preview = document.getElementById('messagePreview').textContent;
+    saveOrderToHistory(preview);
+    window.open('https://line.me/R/msg/text/?' + encodeURIComponent(preview), '_blank');
+  }
+
+  // 本体・役物のどちらかに数量が入っているか
+  function hasAnythingToOrder() {
+    if (order.type === 'ガルテクト') {
+      const qty = parseInt(document.getElementById('galtech_honbody')?.value || 0);
+      return qty > 0 || Object.values(galtechQty).some(v => v > 0);
+    }
+    if (FIXED_SIZE_TYPES.includes(order.type)) {
+      if (parseInt(document.getElementById('fixedQty')?.value || 0) > 0) return true;
+    } else {
+      for (let i = 1; i <= currentRowCount; i++) {
+        const len = parseFloat(document.getElementById('len'+i)?.value || 0);
+        const qty = parseInt(document.getElementById('qty'+i)?.value || 0);
+        if (len > 0 && qty > 0) return true;
+      }
+    }
+    return Object.values(partsQty).some(v => v > 0);
+  }
+
+  // ===== 注文履歴保存・表示 =====
+  const HISTORY_KEY = 'roofOrders_v1';
+
+  function saveOrderToHistory(lineMsg) {
+    const now = new Date();
+    const month = now.getFullYear() + '年' + (now.getMonth()+1) + '月';
+    const date  = now.getFullYear() + '/' + (now.getMonth()+1) + '/' + now.getDate();
+    const entry = {
+      id:       now.getTime(),
+      month,
+      date,
+      siteName: order.siteName,
+      type:     order.type,
+      color:    order.color,
+      lineMsg
+    };
+    try {
+      const all = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+      all.unshift(entry); // 最新を先頭に
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+    } catch(e) {}
+  }
+
+  function loadHistory() {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); }
+    catch(e) { return []; }
+  }
+
+  function deleteOrder(id) {
+    if (!confirm('この注文履歴を削除しますか？')) return;
+    try {
+      const all = loadHistory().filter(e => e.id !== id);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+      renderHistory();
+    } catch(e) {}
+  }
+
+  function clearMonthOrders(month) {
+    if (!confirm(month + ' の履歴をすべて削除しますか？')) return;
+    try {
+      const all = loadHistory().filter(e => e.month !== month);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(all));
+      renderHistory();
+    } catch(e) {}
+  }
+
+  function renderHistory() {
+    const all = loadHistory();
+    const container = document.getElementById('historyContent');
+    if (all.length === 0) {
+      container.innerHTML = '<div class="history-empty">📭 まだ注文履歴がありません<br><span style="font-size:12px">LINEで発注するたびに自動保存されます</span></div>';
+      return;
+    }
+    // 月別にグループ化
+    const groups = {};
+    all.forEach(e => {
+      if (!groups[e.month]) groups[e.month] = [];
+      groups[e.month].push(e);
+    });
+    let html = '';
+    Object.keys(groups).forEach(month => {
+      const entries = groups[month];
+      const safeMonth = month.replace(/'/g, "\\'");
+      html += `<div class="history-month">
+        <div class="history-month-header" onclick="toggleMonthGroup('mg_${month.replace(/[年月]/g,'_')}')">
+          <span>📅 ${month}</span>
+          <span class="count">${entries.length}件 ／ <span onclick="event.stopPropagation();clearMonthOrders('${safeMonth}')" style="text-decoration:underline;cursor:pointer;opacity:0.8">全削除</span></span>
+        </div>
+        <div id="mg_${month.replace(/[年月]/g,'_')}">`;
+      entries.forEach(e => {
+        const preview = e.lineMsg.split('\n').slice(0,6).join('\n');
+        html += `<div class="history-entry">
+          <button class="history-delete-btn" onclick="deleteOrder(${e.id})">🗑</button>
+          <div class="history-entry-date">${e.date}</div>
+          <div class="history-entry-title">📍 ${e.siteName}</div>
+          <div class="history-entry-meta">${e.type}　${e.color}</div>
+          <details style="margin-top:8px">
+            <summary style="font-size:12px;color:#2d6a9f;cursor:pointer;font-weight:700">メッセージを見る</summary>
+            <pre style="font-size:12px;color:#333;white-space:pre-wrap;background:#f0f4f8;border-radius:8px;padding:10px;margin-top:6px;line-height:1.6">${e.lineMsg.replace(/</g,'&lt;')}</pre>
+          </details>
+        </div>`;
+      });
+      html += `</div></div>`;
+    });
+    container.innerHTML = html;
+  }
+
+  function toggleMonthGroup(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+  }
+
+  let historyVisible = false;
+  function toggleHistory() {
+    historyVisible = !historyVisible;
+    const histCard = document.getElementById('cardHistory');
+    // フォームエリア全体をラップするdivで制御
+    const formArea = document.getElementById('formArea');
+    if (historyVisible) {
+      formArea.style.display = 'none';
+      histCard.style.display = '';
+      renderHistory();
+    } else {
+      formArea.style.display = '';
+      histCard.style.display = 'none';
+    }
+    const btn = document.getElementById('historyToggleBtn');
+    btn.innerHTML = historyVisible ? '✕ 閉じる' : '📋<br>履歴';
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+
+  // ===== リセット =====
+  function resetAll() {
+    if (!confirm('入力内容をすべてリセットしますか？')) return;
+    order.siteName = ''; order.type = ''; order.maker = ''; order.thickness = ''; order.color = '';
+    document.getElementById('thicknessWrap').style.display = 'none';
+    document.querySelectorAll('.thickness-btn').forEach(b => b.classList.remove('selected'));
+    partsQty = {};
+    galtechColor = '';
+    galtechQty = {};
+    fukuzaiNeeded = null;
+    const yBtn = document.getElementById('fukuYes');
+    const nBtn = document.getElementById('fukuNo');
+    if (yBtn) { yBtn.style.background=''; yBtn.style.color=''; yBtn.style.borderColor=''; }
+    if (nBtn) { nBtn.style.background=''; nBtn.style.color=''; nBtn.style.borderColor=''; }
+    document.getElementById('fukuzaiInputWrap').style.display = 'none';
+    document.getElementById('fukuzaiMemo').value = '';
+    document.getElementById('siteNameInput').value = '';
+    document.querySelectorAll('.option-btn').forEach(b => b.classList.remove('selected'));
+    document.querySelectorAll('.custom-input-wrap').forEach(w => w.classList.remove('show'));
+    document.querySelectorAll('.text-input').forEach(i => i.value = '');
+    for (let i = 1; i <= 15; i++) {
+      const lenEl = document.getElementById('len'+i);
+      const qtyEl = document.getElementById('qty'+i);
+      if (lenEl) lenEl.value = '';
+      if (qtyEl) qtyEl.value = '';
+    }
+    for (let i = 2; i <= 15; i++) {
+      const row = document.getElementById('lenRow'+i);
+      if (row) row.style.display = 'none';
+    }
+    currentRowCount = 1;
+    const addRowEl = document.getElementById('addRowBtn');
+    const removeRowEl = document.getElementById('removeRowBtn');
+    if (addRowEl) addRowEl.disabled = false;
+    if (removeRowEl) removeRowEl.style.display = 'none';
+    ['nextBtn1','nextBtn2','nextBtn3','nextBtn4','nextBtn5'].forEach(id => {
+      document.getElementById(id).disabled = true;
+    });
+    document.getElementById('colorContainer').innerHTML = '';
+    document.getElementById('dimContainer').innerHTML = '';
+    document.getElementById('step5Title').textContent = '寸法と数量を入力';
+    document.getElementById('partsContainer').innerHTML = '';
+    document.getElementById('galtechContainer').innerHTML = '';
+    document.getElementById('nextBtnGaltech').disabled = true;
+    currentRowCount = 1;
+    showCard(1);
+    updateStepper(1);
+    window.scrollTo({top:0, behavior:'smooth'});
+  }
+</script>
+</body>
+</html>
