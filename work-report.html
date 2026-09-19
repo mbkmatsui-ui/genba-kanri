@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="作業報告書">
+  <title>作業報告書</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Yu Gothic', sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      padding: 16px;
+      color: #333;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    .app-header {
+      background: linear-gradient(135deg, #7c4a03, #d97706);
+      color: white;
+      padding: 18px 20px;
+      border-radius: 14px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .app-header .icon { font-size: 28px; }
+    .app-header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
+    .app-header p { font-size: 12px; opacity: 0.9; margin-top: 2px; }
+
+    .card { background: white; border-radius: 16px; padding: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); margin-bottom: 14px; }
+    .card-title { font-size: 15px; font-weight: 700; color: #7c4a03; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+    .card-title .sub { font-size: 11px; font-weight: 600; color: #999; margin-left: auto; }
+    .field { margin-bottom: 14px; }
+    .field:last-child { margin-bottom: 0; }
+    .label { display: block; font-size: 12px; font-weight: 700; color: #777; margin-bottom: 6px; letter-spacing: 0.3px; }
+    .label .req, .card-title .req { color: #c0392b; margin-left: 4px; }
+    .text-input.invalid { border-color: #dc2626; background: #fef2f2; }
+    .invalid-box { outline: 2px solid #dc2626; outline-offset: 4px; border-radius: 12px; }
+    .req-note { font-size: 12px; color: #c0392b; margin-bottom: 12px; }
+
+    .text-input, textarea.text-input {
+      width: 100%; padding: 12px 14px; border: 2px solid #dde4ed; border-radius: 10px;
+      font-size: 16px; color: #333; outline: none; transition: border-color 0.2s; background: #fff;
+      font-family: inherit;
+    }
+    .text-input:focus { border-color: #d97706; box-shadow: 0 0 0 3px rgba(217,119,6,0.12); }
+    .text-input.big { font-size: 18px; font-weight: 600; padding: 14px; }
+    textarea.text-input { resize: vertical; line-height: 1.6; min-height: 96px; }
+    .row { display: flex; gap: 10px; }
+    .row > * { flex: 1; min-width: 0; }
+
+    .weather-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .opt-btn {
+      background: #fffaf2; border: 2px solid #eadbc4; border-radius: 12px; padding: 10px 4px;
+      font-size: 14px; font-weight: 600; color: #444; cursor: pointer; transition: all 0.15s; text-align: center;
+      font-family: inherit;
+    }
+    .opt-btn .em { display: block; font-size: 22px; line-height: 1.2; }
+    .opt-btn:active { transform: scale(0.97); }
+    .opt-btn.selected { background: #fff3dc; border-color: #d97706; color: #b45309; }
+
+    .time-summary { margin-top: 8px; font-size: 13px; color: #666; }
+    .time-summary strong { color: #7c4a03; font-size: 15px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+    .chip {
+      display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px;
+      background: #f5f5f4; border: 2px solid #e7e5e4; font-size: 15px; font-weight: 600; color: #444; cursor: pointer;
+      font-family: inherit;
+    }
+    .chip.selected { background: #d97706; border-color: #d97706; color: white; }
+    .chip .x { font-size: 13px; opacity: 0.6; padding: 0 2px; }
+    .chips-empty { font-size: 13px; color: #aaa; padding: 4px 0 10px; }
+    .add-row { display: flex; gap: 8px; }
+    .add-row .text-input { flex: 1; }
+    .small-btn {
+      padding: 0 16px; border-radius: 10px; border: 2px solid #d97706; background: #fff; color: #b45309;
+      font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit;
+    }
+    .count-line { margin-top: 10px; font-size: 13px; color: #666; }
+    .count-line strong { font-size: 18px; color: #7c4a03; }
+    .edit-toggle { font-size: 12px; color: #999; background: none; border: none; text-decoration: underline; cursor: pointer; margin-left: 8px; font-family: inherit; }
+
+    .mat-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .mat-row .name { flex: 1; min-width: 0; }
+    .mat-row .qty { width: 72px; text-align: right; }
+    .mat-row .unit { width: 60px; }
+    .mat-row .ru { width: 34px; flex-shrink: 0; font-size: 14px; color: #666; }
+    .mat-row .len { width: 90px; text-align: right; }
+    .mat-row .text-input { padding: 10px 8px; }
+    .roof-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .roof-row .rl { width: 64px; flex-shrink: 0; font-size: 14px; font-weight: 700; color: #555; }
+    .roof-row .text-input { flex: 1; min-width: 0; padding: 10px 10px; }
+    .roof-row .num { text-align: right; }
+    .roof-row .ru { width: 34px; flex-shrink: 0; font-size: 14px; color: #666; }
+    .roof-row .vt { flex: 2; }
+    .sub-label { font-size: 12px; font-weight: 700; color: #999; margin: 4px 0 8px; }
+    .mat-group { font-size: 14px; font-weight: 700; color: #7c4a03; background: #fff7ea; border-left: 4px solid #d97706; border-radius: 4px; padding: 6px 10px; margin-bottom: 10px; }
+    .mat-group.second { margin-top: 18px; }
+    .del-btn { background: none; border: none; color: #c4c4c4; font-size: 20px; cursor: pointer; padding: 0 4px; }
+    .del-btn:hover { color: #c0392b; }
+    .dashed-btn {
+      width: 100%; padding: 11px; border: 2px dashed #eadbc4; border-radius: 10px; background: #fffdf8;
+      color: #b45309; font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+    }
+
+
+    .note { font-size: 11px; color: #999; margin-top: 6px; line-height: 1.5; }
+
+    .actions { position: sticky; bottom: 0; padding: 12px 0 calc(8px + env(safe-area-inset-bottom)); background: linear-gradient(to top, #f0f4f8 75%, rgba(240,244,248,0)); }
+    .btn-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .btn {
+      flex: 1; padding: 14px 8px; border-radius: 12px; font-size: 15px; font-weight: 700; border: none; cursor: pointer;
+      transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 6px; font-family: inherit;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: linear-gradient(135deg, #d97706, #b45309); color: white; box-shadow: 0 3px 10px rgba(217,119,6,0.3); }
+    .btn-line { background: linear-gradient(135deg, #00c300, #00a000); color: white; box-shadow: 0 3px 10px rgba(0,195,0,0.3); }
+    .btn-secondary { background: white; color: #555; border: 2px solid #dde4ed; }
+    .btn-reset { background: #fff0f0; color: #c0392b; border: 2px solid #f5c6c6; }
+    .btn-sm { font-size: 13px; padding: 10px 6px; }
+
+    .saved-toast {
+      position: fixed; left: 50%; top: 20px; transform: translateX(-50%) translateY(-80px); background: #1f2937; color: white;
+      padding: 10px 18px; border-radius: 999px; font-size: 13px; font-weight: 600; transition: transform 0.25s; z-index: 50;
+    }
+    .saved-toast.show { transform: translateX(-50%) translateY(0); }
+
+
+    /* PDF送信シート */
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; display: none; align-items: flex-end; justify-content: center; }
+    .overlay.show { display: flex; }
+    .sheet {
+      background: white; width: 100%; max-width: 640px; border-radius: 18px 18px 0 0; padding: 18px 16px calc(16px + env(safe-area-inset-bottom));
+      max-height: 92vh; display: flex; flex-direction: column; gap: 12px;
+    }
+    .sheet-title { font-size: 16px; font-weight: 700; color: #7c4a03; }
+    .sheet-file { font-size: 12px; color: #666; word-break: break-all; }
+    .sheet-preview { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid #e5e7eb; border-radius: 10px; background: #f3f4f6; padding: 8px; }
+    .sheet-preview img { width: 100%; display: block; box-shadow: 0 1px 4px rgba(0,0,0,0.15); background: white; }
+    .sheet-loading { padding: 40px 0; text-align: center; color: #666; font-size: 14px; }
+    .sheet-note { font-size: 12px; color: #92400e; background: #fef3c7; border-radius: 8px; padding: 8px 10px; line-height: 1.5; }
+    .sheet .btn-row { margin-bottom: 0; }
+    .btn-line.big { flex: 2; font-size: 16px; }
+    a.btn { text-decoration: none; }
+
+    /* ===== PDF用（画面外で描画して画像化） ===== */
+    #pdfSheet { position: absolute; left: -10000px; top: 0; width: 186mm; background: white; }
+    .ps { font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif; color: #000; font-size: 11pt; }
+    .ps-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 8px; }
+    .ps-title { font-size: 22pt; font-weight: 700; letter-spacing: 0.5em; border-bottom: 3px double #000; padding: 0 0.2em 2px 0.7em; }
+    .ps-stamps { display: flex; border: 1px solid #000; }
+    .ps-stamp { width: 20mm; border-left: 1px solid #000; text-align: center; }
+    .ps-stamp:first-child { border-left: none; }
+    .ps-stamp .h { font-size: 8pt; border-bottom: 1px solid #000; padding: 1px 0; }
+    .ps-stamp .b { height: 17mm; }
+    .ps table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    .ps th, .ps td { border: 1px solid #000; padding: 5px 7px; vertical-align: top; text-align: left; word-break: break-all; }
+    .ps th { background: #efefef; font-weight: 700; width: 24mm; font-size: 10pt; vertical-align: middle; text-align: center; }
+    .ps td { white-space: pre-wrap; min-height: 8mm; }
+    .ps .h-sm td { height: 8mm; }
+    .ps .h-work td { height: 40mm; }
+    .ps .h-mid td { height: 16mm; }
+    .ps .mat th { width: auto; }
+    .ps .mat td { height: 6.5mm; padding-top: 3px; padding-bottom: 3px; }
+    .ps .mat .c-qty { width: 22mm; text-align: right; }
+    .ps .mat .c-unit { width: 16mm; text-align: center; }
+    .ps .mat .c-grp { width: 14mm; text-align: center; vertical-align: middle; font-weight: 700; background: #f7f7f7; }
+    .ps-sec { font-size: 10pt; font-weight: 700; margin: 8px 0 3px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="app-header">
+    <div class="icon">📝</div>
+    <div>
+      <h1>作業報告書</h1>
+      <p>入力 → PDFにしてLINEグループへ送信</p>
+    </div>
+  </div>
+
+  <div id="formArea">
+    <div class="req-note">＊ は必須です。使用材料以外はすべて入力してください（ない場合は「なし」）。</div>
+    <!-- 基本情報 -->
+    <div class="card">
+      <div class="card-title">📅 日付・天候</div>
+      <div class="field">
+        <label class="label" for="f_date">作業日<span class="req">*</span></label>
+        <input type="date" id="f_date" class="text-input">
+      </div>
+      <div class="field">
+        <span class="label">天候<span class="req">*</span></span>
+        <div class="weather-grid" id="weatherGrid"></div>
+      </div>
+    </div>
+
+    <!-- 現場 -->
+    <div class="card">
+      <div class="card-title">🏠 現場</div>
+      <div class="field">
+        <label class="label" for="f_site">現場名<span class="req">*</span></label>
+        <input type="text" id="f_site" class="text-input big" placeholder="例：山田様邸 屋根改修">
+      </div>
+      <div class="field">
+        <label class="label" for="f_client">発注者・元請<span class="req">*</span></label>
+        <input type="text" id="f_client" class="text-input" placeholder="例：〇〇工務店">
+      </div>
+    </div>
+
+    <!-- 作業時間 -->
+    <div class="card">
+      <div class="card-title">⏰ 作業時間</div>
+      <div class="row">
+        <div class="field">
+          <label class="label" for="f_start">開始<span class="req">*</span></label>
+          <input type="time" id="f_start" class="text-input">
+        </div>
+        <div class="field">
+          <label class="label" for="f_end">終了<span class="req">*</span></label>
+          <input type="time" id="f_end" class="text-input">
+        </div>
+        <div class="field">
+          <label class="label" for="f_break">休憩（分）<span class="req">*</span></label>
+          <input type="number" id="f_break" class="text-input" inputmode="numeric" min="0" step="10">
+        </div>
+      </div>
+      <div class="time-summary" id="timeSummary"></div>
+    </div>
+
+    <!-- 作業員 -->
+    <div class="card">
+      <div class="card-title">👷 作業員<span class="req">*</span><span class="sub">タップで選択</span></div>
+      <div class="chips" id="workerChips"></div>
+      <div class="add-row">
+        <input type="text" id="newWorker" class="text-input" placeholder="名前を追加">
+        <button class="small-btn" onclick="addWorker()">追加</button>
+      </div>
+      <div class="count-line">
+        作業員 <strong id="workerCount">0</strong> 名
+        <button class="edit-toggle" id="workerEditToggle" onclick="toggleWorkerEdit()">名簿を編集</button>
+      </div>
+    </div>
+
+    <!-- 作業内容 -->
+    <div class="card">
+      <div class="card-title">🔨 作業内容<span class="req">*</span></div>
+      <textarea id="f_work" class="text-input" rows="5" placeholder="例：既存屋根材撤去、野地板増し張り、ルーフィング敷設"></textarea>
+    </div>
+
+    <!-- 使用材料 -->
+    <div class="card">
+      <div class="card-title">📦 使用材料<span class="sub">任意</span></div>
+      <div class="mat-group">屋根</div>
+      <div class="roof-row">
+        <span class="rl">面積</span>
+        <input type="number" id="f_area" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="面積">
+        <span class="ru">㎡</span>
+      </div>
+      <div class="roof-row">
+        <span class="rl">棟</span>
+        <input type="number" id="f_ridge" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
+        <span class="ru">m</span>
+      </div>
+      <div class="roof-row">
+        <span class="rl">換気部材</span>
+        <input type="text" id="f_ventType" class="text-input vt" placeholder="種類">
+        <input type="number" id="f_ventQty" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="個数">
+        <span class="ru">個</span>
+      </div>
+      <div class="sub-label">その他（材料名・数量・単位を入力）</div>
+      <div id="materials"></div>
+      <button class="dashed-btn" onclick="addMaterial()">＋ その他を追加</button>
+
+      <div class="mat-group second">雨樋</div>
+      <div class="roof-row">
+        <span class="rl">軒樋</span>
+        <input type="number" id="f_eave" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
+        <span class="ru">m</span>
+      </div>
+      <div class="roof-row">
+        <span class="rl">縦樋</span>
+        <input type="number" id="f_down" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
+        <span class="ru">m</span>
+      </div>
+      <div class="roof-row">
+        <span class="rl">落ち口</span>
+        <input type="number" id="f_outlet" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="数">
+        <span class="ru">箇所</span>
+      </div>
+      <div class="roof-row">
+        <span class="rl" style="font-size:12px;line-height:1.2">バルコニー<br>排水</span>
+        <input type="number" id="f_balcony" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="数">
+        <span class="ru">箇所</span>
+      </div>
+
+      <div class="mat-group second">板金工事</div>
+      <div class="sub-label">何を何m（例：水切り 12m）</div>
+      <div id="sheetList"></div>
+      <button class="dashed-btn" onclick="addSheet()">＋ 板金を追加</button>
+    </div>
+
+    <!-- 明日の予定・連絡事項 -->
+    <div class="card">
+      <div class="card-title">🗓 明日の予定・連絡事項</div>
+      <div class="field">
+        <label class="label" for="f_next">明日の予定<span class="req">*</span></label>
+        <textarea id="f_next" class="text-input" rows="3" placeholder="例：本体葺き 8:00〜 3名（予定がなければ「なし」）"></textarea>
+      </div>
+      <div class="field">
+        <label class="label" for="f_memo">連絡事項・気づいたこと<span class="req">*</span></label>
+        <textarea id="f_memo" class="text-input" rows="3" placeholder="例：雨樋の破損あり、お施主様へ要報告（なければ「なし」）"></textarea>
+      </div>
+    </div>
+
+    <div class="actions">
+      <div class="btn-row">
+        <button class="btn btn-line big" onclick="openPdfSheet()">📄 PDFにしてLINEで送る</button>
+        <button class="btn btn-reset btn-sm" onclick="resetForm()">🔄 新規</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="saved-toast" id="toast"></div>
+<div id="pdfSheet"></div>
+
+<div class="overlay" id="pdfOverlay">
+  <div class="sheet">
+    <div class="sheet-title" id="pdfTitle">PDFを作成中…</div>
+    <div class="sheet-file" id="pdfFileName"></div>
+    <div class="sheet-preview" id="pdfPreview"><div class="sheet-loading">しばらくお待ちください</div></div>
+    <div class="sheet-note" id="pdfNote" style="display:none"></div>
+    <div class="btn-row">
+      <button class="btn btn-secondary" onclick="closePdfSheet()">閉じる</button>
+      <a class="btn btn-secondary" id="pdfSaveBtn" style="display:none">⬇ PDFを保存</a>
+      <button class="btn btn-line big" id="pdfShareBtn" style="display:none" onclick="sharePdf()">💬 LINEで送る</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== 設定 =====
+  const DRAFT_KEY   = 'workReportDraft_v1';
+  const WORKERS_KEY = 'workReportWorkers_v1';
+  const WEATHERS = [
+    { v: '晴れ', em: '☀️' }, { v: '曇り', em: '☁️' }, { v: '雨', em: '☔' }, { v: '雪', em: '⛄' }
+  ];
+  const DOW = ['日','月','火','水','木','金','土'];
+
+  const $ = id => document.getElementById(id);
+  const TEXT_FIELDS = ['f_date', 'f_site', 'f_client', 'f_start', 'f_end', 'f_break', 'f_work', 'f_area', 'f_ridge', 'f_ventType', 'f_ventQty', 'f_eave', 'f_down', 'f_outlet', 'f_balcony', 'f_next', 'f_memo'];
+
+  let report = emptyReport();
+  let roster = loadJSON(WORKERS_KEY, []);
+  let workerEditMode = false;
+
+  function emptyReport() {
+    return {
+      date: todayStr(), weather: '', site: '', client: '',
+      start: '08:00', end: '17:00', break: '60',
+      workers: [], work: '', area: '', ridge: '', ventType: '', ventQty: '', eave: '', down: '', outlet: '', balcony: '', sheet: [{ name: '', len: '' }], materials: [{ name: '', qty: '', unit: '' }],
+      next: '', memo: ''
+    };
+  }
+
+  function todayStr() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function loadJSON(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v == null ? fallback : v; } catch (e) { return fallback; }
+  }
+  function saveJSON(key, val) {
+    try { localStorage.setItem(key, JSON.stringify(val)); return true; } catch (e) { return false; }
+  }
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+  }
+  function toast(msg) {
+    const t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 1800);
+  }
+  function dateLabel(ds) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(ds || '')) return '';
+    const d = new Date(ds + 'T00:00:00');
+    return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）';
+  }
+
+  // ===== 作業時間 =====
+  function workMinutes() {
+    const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+    const s = toMin(report.start), e = toMin(report.end);
+    if (s == null || e == null || e <= s) return null;
+    return Math.max(0, e - s - (parseInt(report.break, 10) || 0));
+  }
+  function fmtMinutes(m) {
+    return Math.floor(m / 60) + '時間' + (m % 60 ? (m % 60) + '分' : '');
+  }
+  function renderTime() {
+    const m = workMinutes();
+    $('timeSummary').innerHTML = m == null ? '' : '実働 <strong>' + fmtMinutes(m) + '</strong>';
+  }
+
+  // ===== 天候 =====
+  function renderWeather() {
+    $('weatherGrid').innerHTML = WEATHERS.map(w =>
+      '<button type="button" class="opt-btn' + (report.weather === w.v ? ' selected' : '') + '" onclick="setWeather(\'' + w.v + '\')">' +
+      '<span class="em">' + w.em + '</span>' + w.v + '</button>'
+    ).join('');
+  }
+  function setWeather(v) {
+    report.weather = report.weather === v ? '' : v;
+    renderWeather(); saveDraft();
+  }
+
+  // ===== 作業員 =====
+  function renderWorkers() {
+    // 名簿にない人（履歴から開いた場合など）も表示する
+    const names = roster.slice();
+    report.workers.forEach(n => { if (!names.includes(n)) names.push(n); });
+    const box = $('workerChips');
+    if (!names.length) {
+      box.innerHTML = '<div class="chips-empty">下の欄に名前を入れて「追加」してください。名前は次回以降も残ります。</div>';
+    } else {
+      box.innerHTML = names.map((n, i) =>
+        '<button type="button" class="chip' + (report.workers.includes(n) ? ' selected' : '') + '" data-i="' + i + '">' +
+        esc(n) + (workerEditMode ? '<span class="x">✕</span>' : '') + '</button>'
+      ).join('');
+      box.querySelectorAll('.chip').forEach(el => {
+        el.onclick = () => {
+          const n = names[+el.dataset.i];
+          if (workerEditMode) {
+            if (!confirm('「' + n + '」を名簿から削除しますか？')) return;
+            roster = roster.filter(x => x !== n);
+            report.workers = report.workers.filter(x => x !== n);
+            saveJSON(WORKERS_KEY, roster);
+          } else {
+            report.workers = report.workers.includes(n) ? report.workers.filter(x => x !== n) : report.workers.concat(n);
+          }
+          renderWorkers(); saveDraft();
+        };
+      });
+    }
+    $('workerCount').textContent = report.workers.length;
+    $('workerEditToggle').textContent = workerEditMode ? '編集を終わる' : '名簿を編集';
+  }
+  function addWorker() {
+    const inp = $('newWorker');
+    const n = inp.value.trim();
+    if (!n) return;
+    if (!roster.includes(n)) { roster.push(n); saveJSON(WORKERS_KEY, roster); }
+    if (!report.workers.includes(n)) report.workers.push(n);
+    inp.value = '';
+    renderWorkers(); saveDraft();
+  }
+  function toggleWorkerEdit() { workerEditMode = !workerEditMode; renderWorkers(); }
+
+  // ===== 材料 =====
+  function renderMaterials() {
+    $('materials').innerHTML = report.materials.map((m, i) =>
+      '<div class="mat-row">' +
+        '<input class="text-input name" placeholder="材料名" value="' + esc(m.name) + '" data-i="' + i + '" data-k="name">' +
+        '<input class="text-input qty" placeholder="数量" inputmode="decimal" value="' + esc(m.qty) + '" data-i="' + i + '" data-k="qty">' +
+        '<input class="text-input unit" placeholder="単位" value="' + esc(m.unit) + '" data-i="' + i + '" data-k="unit">' +
+        '<button type="button" class="del-btn" onclick="removeMaterial(' + i + ')">✕</button>' +
+      '</div>'
+    ).join('');
+    $('materials').querySelectorAll('input').forEach(el => {
+      el.oninput = () => { report.materials[+el.dataset.i][el.dataset.k] = el.value; saveDraft(); };
+    });
+  }
+  function addMaterial() { report.materials.push({ name: '', qty: '', unit: '' }); renderMaterials(); saveDraft(); }
+  function removeMaterial(i) {
+    report.materials.splice(i, 1);
+    if (!report.materials.length) report.materials.push({ name: '', qty: '', unit: '' });
+    renderMaterials(); saveDraft();
+  }
+  // ===== 板金工事（何を何m） =====
+  function renderSheet() {
+    $('sheetList').innerHTML = report.sheet.map((m, i) =>
+      '<div class="mat-row">' +
+        '<input class="text-input name" placeholder="例：水切り" value="' + esc(m.name) + '" data-i="' + i + '" data-k="name">' +
+        '<input type="number" class="text-input len" placeholder="長さ" inputmode="decimal" min="0" step="0.1" value="' + esc(m.len) + '" data-i="' + i + '" data-k="len">' +
+        '<span class="ru">m</span>' +
+        '<button type="button" class="del-btn" onclick="removeSheet(' + i + ')">✕</button>' +
+      '</div>'
+    ).join('');
+    $('sheetList').querySelectorAll('input').forEach(el => {
+      el.oninput = () => { report.sheet[+el.dataset.i][el.dataset.k] = el.value; saveDraft(); };
+    });
+  }
+  function addSheet() { report.sheet.push({ name: '', len: '' }); renderSheet(); saveDraft(); }
+  function removeSheet(i) {
+    report.sheet.splice(i, 1);
+    if (!report.sheet.length) report.sheet.push({ name: '', len: '' });
+    renderSheet(); saveDraft();
+  }
+  function sheetItems(r) {
+    return (r.sheet || []).filter(x => x.name.trim() || String(x.len).trim()).map(x => ({ name: x.name.trim(), qty: x.len, unit: 'm' }));
+  }
+  // 屋根：面積・棟・換気部材（入力があるものだけ）
+  function roofItems(r) {
+    const items = [];
+    if (String(r.area).trim()) items.push({ name: '面積', qty: r.area, unit: '㎡' });
+    if (String(r.ridge).trim()) items.push({ name: '棟', qty: r.ridge, unit: 'm' });
+    if (r.ventType.trim() || String(r.ventQty).trim()) items.push({ name: '換気部材' + (r.ventType.trim() ? '（' + r.ventType.trim() + '）' : ''), qty: r.ventQty, unit: '個' });
+    return items;
+  }
+  // 雨樋：軒樋・縦樋・落ち口・バルコニー排水（入力があるものだけ）
+  function gutterItems(r) {
+    const items = [];
+    if (String(r.eave).trim()) items.push({ name: '軒樋', qty: r.eave, unit: 'm' });
+    if (String(r.down).trim()) items.push({ name: '縦樋', qty: r.down, unit: 'm' });
+    if (String(r.outlet).trim()) items.push({ name: '落ち口', qty: r.outlet, unit: '箇所' });
+    if (String(r.balcony).trim()) items.push({ name: 'バルコニー排水', qty: r.balcony, unit: '箇所' });
+    return items;
+  }
+  function filledMaterials() { return report.materials.filter(m => m.name.trim() || String(m.qty).trim()); }
+
+  // ===== 下書き自動保存 =====
+  function saveDraft() {
+    saveJSON(DRAFT_KEY, report);
+    if (validatedOnce) markRequired();
+  }
+
+  function bindTextFields() {
+    const map = { f_date: 'date', f_site: 'site', f_client: 'client', f_start: 'start', f_end: 'end', f_break: 'break',
+                  f_work: 'work', f_area: 'area', f_ridge: 'ridge', f_ventType: 'ventType', f_ventQty: 'ventQty', f_eave: 'eave', f_down: 'down', f_outlet: 'outlet', f_balcony: 'balcony', f_next: 'next', f_memo: 'memo' };
+    TEXT_FIELDS.forEach(id => {
+      $(id).addEventListener('input', () => {
+        report[map[id]] = $(id).value;
+        if (id === 'f_start' || id === 'f_end' || id === 'f_break') renderTime();
+        saveDraft();
+      });
+    });
+    $('newWorker').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addWorker(); } });
+  }
+  function fillTextFields() {
+    $('f_date').value = report.date; $('f_site').value = report.site; $('f_client').value = report.client;
+    $('f_start').value = report.start; $('f_end').value = report.end; $('f_break').value = report.break;
+    $('f_work').value = report.work;
+    $('f_area').value = report.area; $('f_ridge').value = report.ridge; $('f_ventType').value = report.ventType; $('f_ventQty').value = report.ventQty;
+    $('f_eave').value = report.eave; $('f_down').value = report.down;
+    $('f_outlet').value = report.outlet; $('f_balcony').value = report.balcony; $('f_next').value = report.next; $('f_memo').value = report.memo;
+  }
+  function renderAll() {
+    validatedOnce = false;
+    document.querySelectorAll('.invalid, .invalid-box').forEach(el => el.classList.remove('invalid', 'invalid-box'));
+    fillTextFields(); renderWeather(); renderTime(); renderWorkers(); renderMaterials(); renderSheet();
+  }
+
+  // ===== 入力チェック =====
+  // 使用材料以外はすべて必須（連絡事項・明日の予定も、ない場合は「なし」と入力）
+  let validatedOnce = false;
+  function checkRequired() {
+    const blank = v => !String(v == null ? '' : v).trim();
+    const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+    const s = toMin(report.start), e = toMin(report.end);
+    return [
+      { ng: blank(report.date),     label: '作業日',     el: 'f_date' },
+      { ng: !report.weather,        label: '天候',       el: 'weatherGrid' },
+      { ng: blank(report.site),     label: '現場名',     el: 'f_site' },
+      { ng: blank(report.client),   label: '発注者・元請', el: 'f_client' },
+      { ng: s == null,              label: '開始時刻',   el: 'f_start' },
+      { ng: e == null,              label: '終了時刻',   el: 'f_end' },
+      { ng: s != null && e != null && e <= s, label: '作業時間（終了が開始より前になっています）', el: 'f_end' },
+      { ng: blank(report.break) || +report.break < 0, label: '休憩（なければ 0）', el: 'f_break' },
+      { ng: !report.workers.length, label: '作業員（1名以上選択）', el: 'workerChips' },
+      { ng: blank(report.work),     label: '作業内容',   el: 'f_work' },
+      { ng: blank(report.next),     label: '明日の予定（なければ「なし」）', el: 'f_next' },
+      { ng: blank(report.memo),     label: '連絡事項（なければ「なし」）', el: 'f_memo' }
+    ].filter(x => x.ng);
+  }
+  function markRequired() {
+    const bad = checkRequired();
+    const badIds = bad.map(x => x.el);
+    ['f_date', 'weatherGrid', 'f_site', 'f_client', 'f_start', 'f_end', 'f_break', 'workerChips', 'f_work', 'f_next', 'f_memo'].forEach(id => {
+      const el = $(id);
+      el.classList.toggle(el.classList.contains('text-input') ? 'invalid' : 'invalid-box', badIds.includes(id));
+    });
+    return bad;
+  }
+  function validate() {
+    validatedOnce = true;
+    const bad = markRequired();
+    if (!bad.length) return true;
+    $(bad[0].el).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    alert('未入力の項目があります。送信できません。\n\n・' + bad.map(x => x.label).join('\n・'));
+    return false;
+  }
+
+  // ===== 報告書（PDFの中身） =====
+  function buildReportHtml() {
+    const r = report;
+    const v = s => esc(s || '');
+    const m = workMinutes();
+    const timeHtml = v(r.start) + ' 〜 ' + v(r.end) + '（休憩 ' + v(String(r.break)) + ' 分）' + (m != null ? '　実働 ' + fmtMinutes(m) : '');
+
+    // 屋根（面積・棟・換気部材・その他）・雨樋・板金は常に表の形で表示
+    const roofRows = [
+      { name: '面積', qty: r.area, unit: '㎡' },
+      { name: '棟', qty: r.ridge, unit: 'm' },
+      { name: '換気部材（種類：' + (r.ventType.trim() ? v(r.ventType.trim()) : '<span style="display:inline-block;width:40mm"></span>') + '）', qty: r.ventQty, unit: '個', html: true }
+    ];
+    const others = filledMaterials();
+    others.forEach((x, i) => roofRows.push({ name: (i === 0 ? 'その他：' : '') + x.name, qty: x.qty, unit: x.unit }));
+    if (!others.length) roofRows.push({ name: 'その他：', qty: '', unit: '' });
+    const gutterRows = [
+      { name: '軒樋', qty: r.eave, unit: 'm' },
+      { name: '縦樋', qty: r.down, unit: 'm' },
+      { name: '落ち口', qty: r.outlet, unit: '箇所' },
+      { name: 'バルコニー排水', qty: r.balcony, unit: '箇所' }
+    ];
+    const sheetRows = sheetItems(r);
+    if (!sheetRows.length) sheetRows.push({ name: '', qty: '', unit: 'm' });
+    const groupHtml = (label, rows) => rows.map((x, i) =>
+      '<tr>' + (i === 0 ? '<td class="c-grp" rowspan="' + rows.length + '">' + label + '</td>' : '') +
+      '<td>' + (x.html ? x.name : v(x.name)) + '</td><td class="c-qty">' + v(x.qty) + '</td><td class="c-unit">' + v(x.unit) + '</td></tr>'
+    ).join('');
+    const matHtml = groupHtml('屋根', roofRows) + groupHtml('雨樋', gutterRows) + groupHtml('板金', sheetRows);
+
+    return '<div class="ps">' +
+      '<div class="ps-head">' +
+        '<div class="ps-title">作業報告書</div>' +
+        '<div class="ps-stamps">' +
+          ['確認', '承認'].map(h => '<div class="ps-stamp"><div class="h">' + h + '</div><div class="b"></div></div>').join('') +
+        '</div>' +
+      '</div>' +
+      '<table>' +
+        '<tr class="h-sm"><th>作業日</th><td>' + dateLabel(r.date) + '</td><th>天候</th><td>' + v(r.weather) + '</td></tr>' +
+        '<tr class="h-sm"><th>現場名</th><td colspan="3">' + v(r.site) + '</td></tr>' +
+        '<tr class="h-sm"><th>発注者</th><td colspan="3">' + v(r.client) + '</td></tr>' +
+        '<tr class="h-sm"><th>作業時間</th><td colspan="3">' + timeHtml + '</td></tr>' +
+        '<tr class="h-sm"><th>作業員</th><td colspan="2">' + v(r.workers.join('、')) + '</td><td style="text-align:right;vertical-align:middle">' + r.workers.length + ' 名</td></tr>' +
+        '<tr class="h-work"><th>作業内容</th><td colspan="3">' + v(r.work) + '</td></tr>' +
+      '</table>' +
+      '<div class="ps-sec">使用材料</div>' +
+      '<table class="mat"><tr><th class="c-grp">区分</th><th>材料名</th><th class="c-qty" style="text-align:center">数量</th><th class="c-unit">単位</th></tr>' + matHtml + '</table>' +
+      '<table style="margin-top:8px">' +
+        '<tr class="h-mid"><th>明日の予定</th><td>' + v(r.next) + '</td></tr>' +
+        '<tr class="h-mid"><th>連絡事項</th><td>' + v(r.memo) + '</td></tr>' +
+      '</table>' +
+    '</div>';
+  }
+  // ===== PDF作成 → LINEで送信 =====
+  // 報告書を画像にしてA4のPDFに貼る（日本語フォントを埋め込まずに済む）
+  const LIBS = [
+    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js'
+  ];
+  let libsReady = null;
+  function loadLibs() {
+    if (!libsReady) {
+      libsReady = Promise.all(LIBS.map(src => new Promise((resolve, reject) => {
+        const el = document.createElement('script');
+        el.src = src; el.onload = resolve;
+        el.onerror = () => reject(new Error('PDFの部品を読み込めませんでした。電波の良い場所で再度お試しください。'));
+        document.head.appendChild(el);
+      }))).catch(err => { libsReady = null; throw err; });
+    }
+    return libsReady;
+  }
+  function pdfFileName() {
+    const site = report.site.trim().replace(/[\\/:*?"<>|\s]+/g, '_');
+    return '作業報告書_' + report.date + '_' + site + '.pdf';
+  }
+  let pdfFile = null, pdfUrl = null;
+  async function makePdf() {
+    await loadLibs();
+    const box = $('pdfSheet');
+    box.innerHTML = buildReportHtml();
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    const canvas = await html2canvas(box, { scale: 2, backgroundColor: '#ffffff' });
+    box.innerHTML = '';
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const M = 12, maxW = 210 - M * 2, maxH = 297 - M * 2;
+    let w = maxW, h = canvas.height * maxW / canvas.width;
+    if (h > maxH) { w = w * maxH / h; h = maxH; } // 1枚に収める
+    const img = canvas.toDataURL('image/jpeg', 0.92);
+    pdf.addImage(img, 'JPEG', (210 - w) / 2, M, w, h);
+    return { file: new File([pdf.output('blob')], pdfFileName(), { type: 'application/pdf' }), preview: img };
+  }
+  function canShareFile(file) {
+    try { return !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
+  }
+  async function openPdfSheet() {
+    if (!validate()) return;
+    $('pdfTitle').textContent = 'PDFを作成中…';
+    $('pdfFileName').textContent = '';
+    $('pdfPreview').innerHTML = '<div class="sheet-loading">しばらくお待ちください</div>';
+    $('pdfNote').style.display = 'none';
+    $('pdfShareBtn').style.display = 'none';
+    $('pdfSaveBtn').style.display = 'none';
+    $('pdfOverlay').classList.add('show');
+    try {
+      const out = await makePdf();
+      pdfFile = out.file;
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl);
+      pdfUrl = URL.createObjectURL(pdfFile);
+      $('pdfTitle').textContent = 'PDFができました';
+      $('pdfFileName').textContent = pdfFile.name;
+      $('pdfPreview').innerHTML = '<img src="' + out.preview + '" alt="作業報告書">';
+      const saveBtn = $('pdfSaveBtn');
+      saveBtn.href = pdfUrl; saveBtn.download = pdfFile.name;
+      if (canShareFile(pdfFile)) {
+        // 共有はタップ操作の中で呼ぶ必要があるので、作成後にもう一度押してもらう
+        $('pdfShareBtn').style.display = '';
+        $('pdfNote').textContent = '「LINEで送る」→ 共有メニューで LINE → 送り先のグループを選んでください。';
+      } else {
+        saveBtn.style.display = '';
+        $('pdfNote').textContent = 'この端末ではLINEへ直接送れません。PDFを保存してから、LINEのグループにファイルとして送ってください。';
+      }
+      $('pdfNote').style.display = '';
+    } catch (err) {
+      $('pdfTitle').textContent = 'PDFを作成できませんでした';
+      $('pdfPreview').innerHTML = '<div class="sheet-loading">' + esc(err.message || err) + '</div>';
+    }
+  }
+  async function sharePdf() {
+    if (!pdfFile) return;
+    try {
+      await navigator.share({ files: [pdfFile], title: pdfFile.name });
+      closePdfSheet();
+      toast('送信しました');
+    } catch (err) {
+      if (err && err.name === 'AbortError') return; // 共有メニューを閉じただけ
+      $('pdfSaveBtn').style.display = '';
+      $('pdfNote').textContent = '共有できませんでした。PDFを保存してから、LINEのグループにファイルとして送ってください。';
+    }
+  }
+  function closePdfSheet() { $('pdfOverlay').classList.remove('show'); }
+
+  // ===== 新規 =====
+  function isDirty() {
+    return !!(report.site.trim() || report.work.trim() || report.next.trim() || report.memo.trim());
+  }
+  function resetForm() {
+    if (isDirty() && !confirm('入力中の内容を消して、新しい報告書を作りますか？\n（送信済みのPDFには影響しません）')) return;
+    const keep = report; // 現場名・発注者・作業員は続けて使うことが多いので引き継ぐ
+    report = emptyReport();
+    report.site = keep.site; report.client = keep.client; report.workers = keep.workers.slice();
+    renderAll(); saveDraft();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    toast('新しい報告書（現場名・作業員は引き継ぎ）');
+  }
+
+  // ===== 起動 =====
+  (function init() {
+    const draft = loadJSON(DRAFT_KEY, null);
+    if (draft) report = Object.assign(emptyReport(), draft);
+    if (!report.materials || !report.materials.length) report.materials = [{ name: '', qty: '', unit: '' }];
+    if (!report.sheet || !report.sheet.length) report.sheet = [{ name: '', len: '' }];
+    bindTextFields();
+    renderAll();
+  })();
+</script>
+</body>
+</html>
