@@ -304,11 +304,11 @@
       <button class="dashed-btn" onclick="addSheet()">＋ 板金を追加</button>
     </div>
 
-    <!-- 明日の予定・連絡事項 -->
+    <!-- 次の日の予定・連絡事項 -->
     <div class="card">
-      <div class="card-title">🗓 明日の予定・連絡事項</div>
+      <div class="card-title">🗓 次の日の予定・連絡事項</div>
       <div class="field">
-        <label class="label" for="f_next">明日の予定<span class="req">*</span></label>
+        <label class="label" for="f_next">次の日の予定<span class="req">*</span></label>
         <textarea id="f_next" class="text-input" rows="3" placeholder="例：本体葺き 8:00〜 3名（予定がなければ「なし」）"></textarea>
       </div>
       <div class="field">
@@ -555,7 +555,7 @@
   }
 
   // ===== 入力チェック =====
-  // 使用材料以外はすべて必須（連絡事項・明日の予定も、ない場合は「なし」と入力）
+  // 使用材料以外はすべて必須（連絡事項・次の日の予定も、ない場合は「なし」と入力）
   let validatedOnce = false;
   function checkRequired() {
     const blank = v => !String(v == null ? '' : v).trim();
@@ -572,7 +572,7 @@
       { ng: blank(report.break) || +report.break < 0, label: '休憩（なければ 0）', el: 'f_break' },
       { ng: !report.workers.length, label: '作業員（1名以上選択）', el: 'workerChips' },
       { ng: blank(report.work),     label: '作業内容',   el: 'f_work' },
-      { ng: blank(report.next),     label: '明日の予定（なければ「なし」）', el: 'f_next' },
+      { ng: blank(report.next),     label: '次の日の予定（なければ「なし」）', el: 'f_next' },
       { ng: blank(report.memo),     label: '連絡事項（なければ「なし」）', el: 'f_memo' }
     ].filter(x => x.ng);
   }
@@ -642,7 +642,7 @@
       '<div class="ps-sec">使用材料</div>' +
       '<table class="mat"><tr><th class="c-grp">区分</th><th>材料名</th><th class="c-qty" style="text-align:center">数量</th><th class="c-unit">単位</th></tr>' + matHtml + '</table>' +
       '<table style="margin-top:8px">' +
-        '<tr class="h-mid"><th>明日の予定</th><td>' + v(r.next) + '</td></tr>' +
+        '<tr class="h-mid"><th>次の日の予定</th><td>' + v(r.next) + '</td></tr>' +
         '<tr class="h-mid"><th>連絡事項</th><td>' + v(r.memo) + '</td></tr>' +
       '</table>' +
     '</div>';
