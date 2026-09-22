@@ -273,6 +273,7 @@
   const DRAFT_KEY     = 'workReportDraft_v2';
   const OLD_DRAFT_KEY = 'workReportDraft_v1';
   const WORKERS_KEY   = 'workReportWorkers_v1';
+  const CLIENTS_KEY   = 'workReportClients_v1';
   const WEATHERS = [
     { v: '晴れ', em: '☀️' }, { v: '曇り', em: '☁️' }, { v: '雨', em: '☔' }, { v: '雪', em: '⛄' }
   ];
@@ -283,7 +284,9 @@
 
   let report = emptyReport();
   let roster = loadJSON(WORKERS_KEY, []);
+  let clients = loadJSON(CLIENTS_KEY, []);
   let workerEditMode = false;
+  let clientEditMode = false;
 
   function emptySite(start) {
     return {
@@ -391,6 +394,36 @@
   }
   function toggleWorkerEdit() { workerEditMode = !workerEditMode; renderWorkers(); }
 
+  // ===== 発注者の名簿（入力した名前を覚えて次回から選べる） =====
+  function allClients() {
+    const list = clients.slice();
+    report.sites.forEach(st => { const c = (st.client || '').trim(); if (c && !list.includes(c)) list.push(c); });
+    return list;
+  }
+  function clientBlockHtml(st, i) {
+    const list = allClients();
+    const chips = list.length
+      ? list.map(c => '<button type="button" class="chip' + (st.client === c ? ' selected' : '') + '" data-csite="' + i + '" data-cname="' + esc(c) + '">' +
+          esc(c) + (clientEditMode ? '<span class="x">✕</span>' : '') + '</button>').join('')
+      : '<div class="chips-empty">下の欄に発注者名を入れて「追加」してください。次回から選べます。</div>';
+    return '<span class="label">発注者・元請<span class="req">*</span><span class="sub" style="font-weight:600;color:#999;margin-left:6px">タップで選択</span></span>' +
+      '<div class="chips" id="s' + i + '_client">' + chips + '</div>' +
+      '<div class="add-row">' +
+        '<input type="text" class="text-input" id="s' + i + '_newClient" placeholder="発注者を追加" data-cinput="' + i + '">' +
+        '<button type="button" class="small-btn" data-cadd="' + i + '">追加</button>' +
+      '</div>' +
+      (list.length ? '<div class="count-line"><button type="button" class="edit-toggle" data-cedit="1">' +
+        (clientEditMode ? '編集を終わる' : '発注者名を編集') + '</button></div>' : '');
+  }
+  function addClient(i) {
+    const inp = $('s' + i + '_newClient');
+    const n = (inp.value || '').trim();
+    if (!n) return;
+    if (!clients.includes(n)) { clients.push(n); saveJSON(CLIENTS_KEY, clients); }
+    report.sites[i].client = n;
+    renderSites(); saveDraft();
+  }
+
   // その現場の作業員（1日の作業員と同じ／現場ごとに変更）
   function siteWorkers(st) { return st.sameAsDay ? report.workers : (st.workers || []); }
 
@@ -450,10 +483,7 @@
           '<label class="label" for="s' + i + '_site">現場名<span class="req">*</span></label>' +
           '<input type="text" id="s' + i + '_site" class="text-input big" placeholder="例：山田様邸 屋根改修" value="' + esc(st.site) + '" data-i="' + i + '" data-k="site">' +
         '</div>' +
-        '<div class="field">' +
-          '<label class="label" for="s' + i + '_client">発注者・元請<span class="req">*</span></label>' +
-          '<input type="text" id="s' + i + '_client" class="text-input" placeholder="例：〇〇工務店" value="' + esc(st.client) + '" data-i="' + i + '" data-k="client">' +
-        '</div>' +
+        '<div class="field">' + clientBlockHtml(st, i) + '</div>' +
         '<div class="row">' +
           '<div class="field"><label class="label" for="s' + i + '_start">開始<span class="req">*</span></label>' +
             '<input type="time" id="s' + i + '_start" class="text-input" value="' + esc(st.start) + '" data-i="' + i + '" data-k="start"></div>' +
@@ -525,6 +555,27 @@
       };
     });
     area.querySelectorAll('[data-delsite]').forEach(el => { el.onclick = () => removeSite(+el.dataset.delsite); });
+    area.querySelectorAll('[data-csite]').forEach(el => {
+      el.onclick = () => {
+        const i = +el.dataset.csite, n = el.dataset.cname;
+        if (clientEditMode) {
+          if (!confirm('「' + n + '」を発注者の一覧から消しますか？')) return;
+          clients = clients.filter(x => x !== n);
+          saveJSON(CLIENTS_KEY, clients);
+          report.sites.forEach(st => { if (st.client === n) st.client = ''; });
+        } else {
+          report.sites[i].client = report.sites[i].client === n ? '' : n;
+        }
+        renderSites(); saveDraft();
+      };
+    });
+    area.querySelectorAll('[data-cadd]').forEach(el => { el.onclick = () => addClient(+el.dataset.cadd); });
+    area.querySelectorAll('[data-cinput]').forEach(el => {
+      el.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); addClient(+el.dataset.cinput); } };
+    });
+    area.querySelectorAll('[data-cedit]').forEach(el => {
+      el.onclick = () => { clientEditMode = !clientEditMode; renderSites(); };
+    });
     area.querySelectorAll('[data-wtoggle]').forEach(el => {
       el.onclick = () => {
         const st = report.sites[+el.dataset.wtoggle];
