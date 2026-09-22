@@ -132,6 +132,17 @@
     .saved-toast.show { transform: translateX(-50%) translateY(0); }
 
 
+    /* 現場カード */
+    .site-card { border-top: 4px solid #d97706; }
+    .site-head { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+    .site-num { font-size: 15px; font-weight: 700; color: #7c4a03; }
+    .site-del { margin-left: auto; font-size: 12px; font-weight: 700; color: #c0392b; background: #fff0f0; border: 1.5px solid #f5c6c6; border-radius: 8px; padding: 5px 10px; cursor: pointer; font-family: inherit; }
+    .worker-same { font-size: 14px; color: #333; background: #f5f5f4; border: 2px solid #e7e5e4; border-radius: 10px; padding: 10px 12px; line-height: 1.5; }
+    .worker-same .names { font-weight: 700; }
+    .worker-toggle { font-size: 12px; color: #b45309; background: none; border: none; text-decoration: underline; cursor: pointer; margin-top: 8px; padding: 0; font-family: inherit; }
+    .add-site-btn { margin-bottom: 14px; }
+    .day-worker-note { font-size: 11px; color: #999; margin-top: 8px; line-height: 1.5; }
+
     /* PDF送信シート */
     .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 40; display: none; align-items: flex-end; justify-content: center; }
     .overlay.show { display: flex; }
@@ -199,38 +210,9 @@
       </div>
     </div>
 
-    <!-- 現場 -->
+    <!-- 作業員（1日） -->
     <div class="card">
-      <div class="card-title">🏠 現場</div>
-      <div class="field">
-        <label class="label" for="f_site">現場名<span class="req">*</span></label>
-        <input type="text" id="f_site" class="text-input big" placeholder="例：山田様邸 屋根改修">
-      </div>
-      <div class="field">
-        <label class="label" for="f_client">発注者・元請<span class="req">*</span></label>
-        <input type="text" id="f_client" class="text-input" placeholder="例：〇〇工務店">
-      </div>
-    </div>
-
-    <!-- 作業時間 -->
-    <div class="card">
-      <div class="card-title">⏰ 作業時間</div>
-      <div class="row">
-        <div class="field">
-          <label class="label" for="f_start">開始<span class="req">*</span></label>
-          <input type="time" id="f_start" class="text-input">
-        </div>
-        <div class="field">
-          <label class="label" for="f_end">終了<span class="req">*</span></label>
-          <input type="time" id="f_end" class="text-input">
-        </div>
-      </div>
-      <div class="time-summary" id="timeSummary"></div>
-    </div>
-
-    <!-- 作業員 -->
-    <div class="card">
-      <div class="card-title">👷 作業員<span class="req">*</span><span class="sub">タップで選択</span></div>
+      <div class="card-title">👷 作業員（1日）<span class="sub">タップで選択</span></div>
       <div class="chips" id="workerChips"></div>
       <div class="add-row">
         <input type="text" id="newWorker" class="text-input" placeholder="名前を追加">
@@ -240,65 +222,12 @@
         作業員 <strong id="workerCount">0</strong> 名
         <button class="edit-toggle" id="workerEditToggle" onclick="toggleWorkerEdit()">名簿を編集</button>
       </div>
+      <div class="day-worker-note">ここで選んだ人が、各現場の作業員になります。現場ごとに変えることもできます。</div>
     </div>
 
-    <!-- 作業内容 -->
-    <div class="card">
-      <div class="card-title">🔨 作業内容<span class="req">*</span></div>
-      <textarea id="f_work" class="text-input" rows="5" placeholder="例：既存屋根材撤去、野地板増し張り、ルーフィング敷設"></textarea>
-    </div>
-
-    <!-- 使用材料 -->
-    <div class="card">
-      <div class="card-title">📦 使用材料<span class="sub">任意</span></div>
-      <div class="mat-group">屋根</div>
-      <div class="roof-row">
-        <span class="rl">面積</span>
-        <input type="number" id="f_area" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="面積">
-        <span class="ru">㎡</span>
-      </div>
-      <div class="roof-row">
-        <span class="rl">棟</span>
-        <input type="number" id="f_ridge" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
-        <span class="ru">m</span>
-      </div>
-      <div class="roof-row">
-        <span class="rl">換気部材</span>
-        <input type="text" id="f_ventType" class="text-input vt" placeholder="種類">
-        <input type="number" id="f_ventQty" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="個数">
-        <span class="ru">個</span>
-      </div>
-      <div class="sub-label">その他（材料名・数量・単位を入力）</div>
-      <div id="materials"></div>
-      <button class="dashed-btn" onclick="addMaterial()">＋ その他を追加</button>
-
-      <div class="mat-group second">雨樋</div>
-      <div class="roof-row">
-        <span class="rl">軒樋</span>
-        <input type="number" id="f_eave" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
-        <span class="ru">m</span>
-      </div>
-      <div class="roof-row">
-        <span class="rl">縦樋</span>
-        <input type="number" id="f_down" class="text-input num" inputmode="decimal" min="0" step="0.1" placeholder="長さ">
-        <span class="ru">m</span>
-      </div>
-      <div class="roof-row">
-        <span class="rl">落ち口</span>
-        <input type="number" id="f_outlet" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="数">
-        <span class="ru">箇所</span>
-      </div>
-      <div class="roof-row">
-        <span class="rl" style="font-size:12px;line-height:1.2">バルコニー<br>排水</span>
-        <input type="number" id="f_balcony" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="数">
-        <span class="ru">箇所</span>
-      </div>
-
-      <div class="mat-group second">板金工事</div>
-      <div class="sub-label">何を何m（例：水切り 12m）</div>
-      <div id="sheetList"></div>
-      <button class="dashed-btn" onclick="addSheet()">＋ 板金を追加</button>
-    </div>
+    <!-- 現場（1軒ごと） -->
+    <div id="sitesArea"></div>
+    <button class="dashed-btn add-site-btn" onclick="addSite()">＋ 現場を追加（2軒目）</button>
 
     <!-- 次の日の予定・連絡事項 -->
     <div class="card">
@@ -341,27 +270,31 @@
 
 <script>
   // ===== 設定 =====
-  const DRAFT_KEY   = 'workReportDraft_v1';
-  const WORKERS_KEY = 'workReportWorkers_v1';
+  const DRAFT_KEY     = 'workReportDraft_v2';
+  const OLD_DRAFT_KEY = 'workReportDraft_v1';
+  const WORKERS_KEY   = 'workReportWorkers_v1';
   const WEATHERS = [
     { v: '晴れ', em: '☀️' }, { v: '曇り', em: '☁️' }, { v: '雨', em: '☔' }, { v: '雪', em: '⛄' }
   ];
   const DOW = ['日','月','火','水','木','金','土'];
 
   const $ = id => document.getElementById(id);
-  const TEXT_FIELDS = ['f_date', 'f_site', 'f_client', 'f_start', 'f_end', 'f_work', 'f_area', 'f_ridge', 'f_ventType', 'f_ventQty', 'f_eave', 'f_down', 'f_outlet', 'f_balcony', 'f_next', 'f_memo'];
+  const COMMON_FIELDS = { f_date: 'date', f_next: 'next', f_memo: 'memo' };
 
   let report = emptyReport();
   let roster = loadJSON(WORKERS_KEY, []);
   let workerEditMode = false;
 
-  function emptyReport() {
+  function emptySite(start) {
     return {
-      date: todayStr(), weather: '', site: '', client: '',
-      start: '08:00', end: '17:00',
-      workers: [], work: '', area: '', ridge: '', ventType: '', ventQty: '', eave: '', down: '', outlet: '', balcony: '', sheet: [{ name: '', len: '' }], materials: [{ name: '', qty: '', unit: '' }],
-      next: '', memo: ''
+      site: '', client: '', start: start || '08:00', end: '17:00',
+      sameAsDay: true, workers: [], work: '',
+      area: '', ridge: '', ventType: '', ventQty: '', eave: '', down: '', outlet: '', balcony: '',
+      materials: [{ name: '', qty: '', unit: '' }], sheet: [{ name: '', len: '' }]
     };
+  }
+  function emptyReport() {
+    return { date: todayStr(), weather: '', workers: [], sites: [emptySite()], next: '', memo: '' };
   }
 
   function todayStr() {
@@ -387,19 +320,15 @@
     return d.getFullYear() + '年' + (d.getMonth()+1) + '月' + d.getDate() + '日（' + DOW[d.getDay()] + '）';
   }
 
-  // ===== 作業時間 =====
-  function workMinutes() {
-    const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-    const s = toMin(report.start), e = toMin(report.end);
-    if (s == null || e == null || e <= s) return null;
-    return e - s;
+  // ===== 作業時間（現場ごと） =====
+  function toMin(t) { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; }
+  function workMinutes(site) {
+    const a = toMin(site.start), b = toMin(site.end);
+    if (a == null || b == null || b <= a) return null;
+    return b - a;
   }
   function fmtMinutes(m) {
     return Math.floor(m / 60) + '時間' + (m % 60 ? (m % 60) + '分' : '');
-  }
-  function renderTime() {
-    const m = workMinutes();
-    $('timeSummary').innerHTML = m == null ? '' : '実働 <strong>' + fmtMinutes(m) + '</strong>';
   }
 
   // ===== 天候 =====
@@ -414,11 +343,16 @@
     renderWeather(); saveDraft();
   }
 
-  // ===== 作業員 =====
-  function renderWorkers() {
-    // 名簿にない人（履歴から開いた場合など）も表示する
+  // ===== 作業員（1日） =====
+  function allNames() {
     const names = roster.slice();
-    report.workers.forEach(n => { if (!names.includes(n)) names.push(n); });
+    const add = n => { if (n && !names.includes(n)) names.push(n); };
+    report.workers.forEach(add);
+    report.sites.forEach(st => (st.workers || []).forEach(add));
+    return names;
+  }
+  function renderWorkers() {
+    const names = allNames();
     const box = $('workerChips');
     if (!names.length) {
       box.innerHTML = '<div class="chips-empty">下の欄に名前を入れて「追加」してください。名前は次回以降も残ります。</div>';
@@ -434,11 +368,12 @@
             if (!confirm('「' + n + '」を名簿から削除しますか？')) return;
             roster = roster.filter(x => x !== n);
             report.workers = report.workers.filter(x => x !== n);
+            report.sites.forEach(st => { st.workers = (st.workers || []).filter(x => x !== n); });
             saveJSON(WORKERS_KEY, roster);
           } else {
             report.workers = report.workers.includes(n) ? report.workers.filter(x => x !== n) : report.workers.concat(n);
           }
-          renderWorkers(); saveDraft();
+          renderWorkers(); renderSites(); saveDraft();
         };
       });
     }
@@ -452,71 +387,181 @@
     if (!roster.includes(n)) { roster.push(n); saveJSON(WORKERS_KEY, roster); }
     if (!report.workers.includes(n)) report.workers.push(n);
     inp.value = '';
-    renderWorkers(); saveDraft();
+    renderWorkers(); renderSites(); saveDraft();
   }
   function toggleWorkerEdit() { workerEditMode = !workerEditMode; renderWorkers(); }
 
-  // ===== 材料 =====
-  function renderMaterials() {
-    $('materials').innerHTML = report.materials.map((m, i) =>
+  // その現場の作業員（1日の作業員と同じ／現場ごとに変更）
+  function siteWorkers(st) { return st.sameAsDay ? report.workers : (st.workers || []); }
+
+  // ===== 現場ブロック =====
+  function siteWorkersHtml(st, i) {
+    if (st.sameAsDay) {
+      const names = report.workers.length ? '<span class="names">' + esc(report.workers.join('、')) + '</span>（' + report.workers.length + ' 名）'
+                                          : '<span class="names">未選択</span>　上の「作業員（1日）」で選んでください';
+      return '<div class="worker-same" id="s' + i + '_workers">1日の作業員と同じ：' + names + '</div>' +
+        '<button type="button" class="worker-toggle" data-wtoggle="' + i + '">この現場だけ変更する</button>';
+    }
+    const names = allNames();
+    const chips = names.length
+      ? names.map(n => '<button type="button" class="chip' + (st.workers.includes(n) ? ' selected' : '') + '" data-wsite="' + i + '" data-wname="' + esc(n) + '">' + esc(n) + '</button>').join('')
+      : '<div class="chips-empty">上の「作業員（1日）」で名前を追加してください。</div>';
+    return '<div class="chips" id="s' + i + '_workers">' + chips + '</div>' +
+      '<div class="count-line">この現場 <strong>' + st.workers.length + '</strong> 名</div>' +
+      '<button type="button" class="worker-toggle" data-wtoggle="' + i + '">1日の作業員に戻す</button>';
+  }
+  function matRowsHtml(st, i) {
+    return st.materials.map((m, j) =>
       '<div class="mat-row">' +
-        '<input class="text-input name" placeholder="材料名" value="' + esc(m.name) + '" data-i="' + i + '" data-k="name">' +
-        '<input class="text-input qty" placeholder="数量" inputmode="decimal" value="' + esc(m.qty) + '" data-i="' + i + '" data-k="qty">' +
-        '<input class="text-input unit" placeholder="単位" value="' + esc(m.unit) + '" data-i="' + i + '" data-k="unit">' +
-        '<button type="button" class="del-btn" onclick="removeMaterial(' + i + ')">✕</button>' +
+        '<input class="text-input name" placeholder="材料名" value="' + esc(m.name) + '" data-i="' + i + '" data-list="materials" data-row="' + j + '" data-k="name">' +
+        '<input class="text-input qty" placeholder="数量" inputmode="decimal" value="' + esc(m.qty) + '" data-i="' + i + '" data-list="materials" data-row="' + j + '" data-k="qty">' +
+        '<input class="text-input unit" placeholder="単位" value="' + esc(m.unit) + '" data-i="' + i + '" data-list="materials" data-row="' + j + '" data-k="unit">' +
+        '<button type="button" class="del-btn" data-delrow="materials" data-i="' + i + '" data-row="' + j + '">✕</button>' +
       '</div>'
     ).join('');
-    $('materials').querySelectorAll('input').forEach(el => {
-      el.oninput = () => { report.materials[+el.dataset.i][el.dataset.k] = el.value; saveDraft(); };
-    });
   }
-  function addMaterial() { report.materials.push({ name: '', qty: '', unit: '' }); renderMaterials(); saveDraft(); }
-  function removeMaterial(i) {
-    report.materials.splice(i, 1);
-    if (!report.materials.length) report.materials.push({ name: '', qty: '', unit: '' });
-    renderMaterials(); saveDraft();
-  }
-  // ===== 板金工事（何を何m） =====
-  function renderSheet() {
-    $('sheetList').innerHTML = report.sheet.map((m, i) =>
+  function sheetRowsHtml(st, i) {
+    return st.sheet.map((m, j) =>
       '<div class="mat-row">' +
-        '<input class="text-input name" placeholder="例：水切り" value="' + esc(m.name) + '" data-i="' + i + '" data-k="name">' +
-        '<input type="number" class="text-input len" placeholder="長さ" inputmode="decimal" min="0" step="0.1" value="' + esc(m.len) + '" data-i="' + i + '" data-k="len">' +
+        '<input class="text-input name" placeholder="例：水切り" value="' + esc(m.name) + '" data-i="' + i + '" data-list="sheet" data-row="' + j + '" data-k="name">' +
+        '<input type="number" class="text-input len" placeholder="長さ" inputmode="decimal" min="0" step="0.1" value="' + esc(m.len) + '" data-i="' + i + '" data-list="sheet" data-row="' + j + '" data-k="len">' +
         '<span class="ru">m</span>' +
-        '<button type="button" class="del-btn" onclick="removeSheet(' + i + ')">✕</button>' +
+        '<button type="button" class="del-btn" data-delrow="sheet" data-i="' + i + '" data-row="' + j + '">✕</button>' +
       '</div>'
     ).join('');
-    $('sheetList').querySelectorAll('input').forEach(el => {
-      el.oninput = () => { report.sheet[+el.dataset.i][el.dataset.k] = el.value; saveDraft(); };
+  }
+  function numRow(label, i, key, unit, ph, step, small) {
+    return '<div class="roof-row">' +
+      '<span class="rl"' + (small ? ' style="font-size:12px;line-height:1.2"' : '') + '>' + label + '</span>' +
+      '<input type="number" class="text-input num" inputmode="decimal" min="0" step="' + step + '" placeholder="' + ph + '" value="' + esc(report.sites[i][key]) + '" data-i="' + i + '" data-k="' + key + '">' +
+      '<span class="ru">' + unit + '</span>' +
+    '</div>';
+  }
+  function renderSites() {
+    const many = report.sites.length > 1;
+    $('sitesArea').innerHTML = report.sites.map((st, i) => {
+      const m = workMinutes(st);
+      return '<div class="card site-card">' +
+        '<div class="site-head">' +
+          '<div class="site-num">🏠 現場 ' + (i + 1) + (many ? ' / ' + report.sites.length : '') + '</div>' +
+          (many ? '<button type="button" class="site-del" data-delsite="' + i + '">✕ この現場を削除</button>' : '') +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label" for="s' + i + '_site">現場名<span class="req">*</span></label>' +
+          '<input type="text" id="s' + i + '_site" class="text-input big" placeholder="例：山田様邸 屋根改修" value="' + esc(st.site) + '" data-i="' + i + '" data-k="site">' +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label" for="s' + i + '_client">発注者・元請<span class="req">*</span></label>' +
+          '<input type="text" id="s' + i + '_client" class="text-input" placeholder="例：〇〇工務店" value="' + esc(st.client) + '" data-i="' + i + '" data-k="client">' +
+        '</div>' +
+        '<div class="row">' +
+          '<div class="field"><label class="label" for="s' + i + '_start">開始<span class="req">*</span></label>' +
+            '<input type="time" id="s' + i + '_start" class="text-input" value="' + esc(st.start) + '" data-i="' + i + '" data-k="start"></div>' +
+          '<div class="field"><label class="label" for="s' + i + '_end">終了<span class="req">*</span></label>' +
+            '<input type="time" id="s' + i + '_end" class="text-input" value="' + esc(st.end) + '" data-i="' + i + '" data-k="end"></div>' +
+        '</div>' +
+        '<div class="time-summary" id="s' + i + '_time">' + (m == null ? '' : '実働 <strong>' + fmtMinutes(m) + '</strong>') + '</div>' +
+        '<div class="field" style="margin-top:14px">' +
+          '<span class="label">作業員<span class="req">*</span></span>' +
+          siteWorkersHtml(st, i) +
+        '</div>' +
+        '<div class="field">' +
+          '<label class="label" for="s' + i + '_work">作業内容<span class="req">*</span></label>' +
+          '<textarea id="s' + i + '_work" class="text-input" rows="4" placeholder="例：既存屋根材撤去、野地板増し張り、ルーフィング敷設" data-i="' + i + '" data-k="work">' + esc(st.work) + '</textarea>' +
+        '</div>' +
+        '<div class="mat-group">屋根<span style="float:right;font-weight:400;font-size:11px;color:#999">使用材料は任意</span></div>' +
+        numRow('面積', i, 'area', '㎡', '面積', '0.1') +
+        numRow('棟', i, 'ridge', 'm', '長さ', '0.1') +
+        '<div class="roof-row">' +
+          '<span class="rl">換気部材</span>' +
+          '<input type="text" class="text-input vt" placeholder="種類" value="' + esc(st.ventType) + '" data-i="' + i + '" data-k="ventType">' +
+          '<input type="number" class="text-input num" inputmode="numeric" min="0" step="1" placeholder="個数" value="' + esc(st.ventQty) + '" data-i="' + i + '" data-k="ventQty">' +
+          '<span class="ru">個</span>' +
+        '</div>' +
+        '<div class="sub-label">その他（材料名・数量・単位を入力）</div>' +
+        '<div>' + matRowsHtml(st, i) + '</div>' +
+        '<button type="button" class="dashed-btn" data-addrow="materials" data-i="' + i + '">＋ その他を追加</button>' +
+        '<div class="mat-group second">雨樋</div>' +
+        numRow('軒樋', i, 'eave', 'm', '長さ', '0.1') +
+        numRow('縦樋', i, 'down', 'm', '長さ', '0.1') +
+        numRow('落ち口', i, 'outlet', '箇所', '数', '1') +
+        numRow('バルコニー<br>排水', i, 'balcony', '箇所', '数', '1', true) +
+        '<div class="mat-group second">板金工事</div>' +
+        '<div class="sub-label">何を何m（例：水切り 12m）</div>' +
+        '<div>' + sheetRowsHtml(st, i) + '</div>' +
+        '<button type="button" class="dashed-btn" data-addrow="sheet" data-i="' + i + '">＋ 板金を追加</button>' +
+      '</div>';
+    }).join('');
+    bindSiteEvents();
+    if (validatedOnce) markRequired();
+  }
+  function bindSiteEvents() {
+    const area = $('sitesArea');
+    area.querySelectorAll('[data-k]').forEach(el => {
+      el.oninput = () => {
+        const st = report.sites[+el.dataset.i];
+        if (el.dataset.list) st[el.dataset.list][+el.dataset.row][el.dataset.k] = el.value;
+        else st[el.dataset.k] = el.value;
+        if (el.dataset.k === 'start' || el.dataset.k === 'end') {
+          const m = workMinutes(st);
+          $('s' + el.dataset.i + '_time').innerHTML = m == null ? '' : '実働 <strong>' + fmtMinutes(m) + '</strong>';
+        }
+        saveDraft();
+      };
+    });
+    area.querySelectorAll('[data-addrow]').forEach(el => {
+      el.onclick = () => {
+        const st = report.sites[+el.dataset.i];
+        st[el.dataset.addrow].push(el.dataset.addrow === 'sheet' ? { name: '', len: '' } : { name: '', qty: '', unit: '' });
+        renderSites(); saveDraft();
+      };
+    });
+    area.querySelectorAll('[data-delrow]').forEach(el => {
+      el.onclick = () => {
+        const st = report.sites[+el.dataset.i], list = el.dataset.delrow;
+        st[list].splice(+el.dataset.row, 1);
+        if (!st[list].length) st[list].push(list === 'sheet' ? { name: '', len: '' } : { name: '', qty: '', unit: '' });
+        renderSites(); saveDraft();
+      };
+    });
+    area.querySelectorAll('[data-delsite]').forEach(el => { el.onclick = () => removeSite(+el.dataset.delsite); });
+    area.querySelectorAll('[data-wtoggle]').forEach(el => {
+      el.onclick = () => {
+        const st = report.sites[+el.dataset.wtoggle];
+        if (st.sameAsDay) { st.sameAsDay = false; st.workers = report.workers.slice(); }
+        else { st.sameAsDay = true; }
+        renderSites(); saveDraft();
+      };
+    });
+    area.querySelectorAll('[data-wsite]').forEach(el => {
+      el.onclick = () => {
+        const st = report.sites[+el.dataset.wsite], n = el.dataset.wname;
+        st.workers = st.workers.includes(n) ? st.workers.filter(x => x !== n) : st.workers.concat(n);
+        renderSites(); saveDraft();
+      };
     });
   }
-  function addSheet() { report.sheet.push({ name: '', len: '' }); renderSheet(); saveDraft(); }
-  function removeSheet(i) {
-    report.sheet.splice(i, 1);
-    if (!report.sheet.length) report.sheet.push({ name: '', len: '' });
-    renderSheet(); saveDraft();
+  function addSite() {
+    const last = report.sites[report.sites.length - 1];
+    report.sites.push(emptySite(last ? last.end : '08:00'));
+    renderSites(); saveDraft();
+    const cards = document.querySelectorAll('#sitesArea .site-card');
+    cards[cards.length - 1].scrollIntoView({ behavior: 'smooth', block: 'start' });
+    toast('現場 ' + report.sites.length + ' を追加しました');
   }
-  function sheetItems(r) {
-    return (r.sheet || []).filter(x => x.name.trim() || String(x.len).trim()).map(x => ({ name: x.name.trim(), qty: x.len, unit: 'm' }));
+  function removeSite(i) {
+    const st = report.sites[i];
+    if ((st.site.trim() || st.work.trim()) && !confirm('「' + (st.site.trim() || '現場 ' + (i + 1)) + '」の入力内容を消しますか？')) return;
+    report.sites.splice(i, 1);
+    if (!report.sites.length) report.sites.push(emptySite());
+    renderSites(); saveDraft();
   }
-  // 屋根：面積・棟・換気部材（入力があるものだけ）
-  function roofItems(r) {
-    const items = [];
-    if (String(r.area).trim()) items.push({ name: '面積', qty: r.area, unit: '㎡' });
-    if (String(r.ridge).trim()) items.push({ name: '棟', qty: r.ridge, unit: 'm' });
-    if (r.ventType.trim() || String(r.ventQty).trim()) items.push({ name: '換気部材' + (r.ventType.trim() ? '（' + r.ventType.trim() + '）' : ''), qty: r.ventQty, unit: '個' });
-    return items;
+
+  // ===== 使用材料のまとめ =====
+  function sheetItems(st) {
+    return (st.sheet || []).filter(x => x.name.trim() || String(x.len).trim()).map(x => ({ name: x.name.trim(), qty: x.len, unit: 'm' }));
   }
-  // 雨樋：軒樋・縦樋・落ち口・バルコニー排水（入力があるものだけ）
-  function gutterItems(r) {
-    const items = [];
-    if (String(r.eave).trim()) items.push({ name: '軒樋', qty: r.eave, unit: 'm' });
-    if (String(r.down).trim()) items.push({ name: '縦樋', qty: r.down, unit: 'm' });
-    if (String(r.outlet).trim()) items.push({ name: '落ち口', qty: r.outlet, unit: '箇所' });
-    if (String(r.balcony).trim()) items.push({ name: 'バルコニー排水', qty: r.balcony, unit: '箇所' });
-    return items;
-  }
-  function filledMaterials() { return report.materials.filter(m => m.name.trim() || String(m.qty).trim()); }
+  function filledMaterials(st) { return (st.materials || []).filter(m => m.name.trim() || String(m.qty).trim()); }
 
   // ===== 下書き自動保存 =====
   function saveDraft() {
@@ -524,59 +569,54 @@
     if (validatedOnce) markRequired();
   }
 
-  function bindTextFields() {
-    const map = { f_date: 'date', f_site: 'site', f_client: 'client', f_start: 'start', f_end: 'end',
-                  f_work: 'work', f_area: 'area', f_ridge: 'ridge', f_ventType: 'ventType', f_ventQty: 'ventQty', f_eave: 'eave', f_down: 'down', f_outlet: 'outlet', f_balcony: 'balcony', f_next: 'next', f_memo: 'memo' };
-    TEXT_FIELDS.forEach(id => {
-      $(id).addEventListener('input', () => {
-        report[map[id]] = $(id).value;
-        if (id === 'f_start' || id === 'f_end') renderTime();
-        saveDraft();
-      });
+  function bindCommonFields() {
+    Object.keys(COMMON_FIELDS).forEach(id => {
+      $(id).addEventListener('input', () => { report[COMMON_FIELDS[id]] = $(id).value; saveDraft(); });
     });
     $('newWorker').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addWorker(); } });
-  }
-  function fillTextFields() {
-    $('f_date').value = report.date; $('f_site').value = report.site; $('f_client').value = report.client;
-    $('f_start').value = report.start; $('f_end').value = report.end;
-    $('f_work').value = report.work;
-    $('f_area').value = report.area; $('f_ridge').value = report.ridge; $('f_ventType').value = report.ventType; $('f_ventQty').value = report.ventQty;
-    $('f_eave').value = report.eave; $('f_down').value = report.down;
-    $('f_outlet').value = report.outlet; $('f_balcony').value = report.balcony; $('f_next').value = report.next; $('f_memo').value = report.memo;
   }
   function renderAll() {
     validatedOnce = false;
     document.querySelectorAll('.invalid, .invalid-box').forEach(el => el.classList.remove('invalid', 'invalid-box'));
-    fillTextFields(); renderWeather(); renderTime(); renderWorkers(); renderMaterials(); renderSheet();
+    $('f_date').value = report.date; $('f_next').value = report.next; $('f_memo').value = report.memo;
+    renderWeather(); renderWorkers(); renderSites();
   }
 
   // ===== 入力チェック =====
   // 使用材料以外はすべて必須（連絡事項・次の日の予定も、ない場合は「なし」と入力）
   let validatedOnce = false;
+  const blank = v => !String(v == null ? '' : v).trim();
   function checkRequired() {
-    const blank = v => !String(v == null ? '' : v).trim();
-    const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
-    const s = toMin(report.start), e = toMin(report.end);
-    return [
-      { ng: blank(report.date),     label: '作業日',     el: 'f_date' },
-      { ng: !report.weather,        label: '天候',       el: 'weatherGrid' },
-      { ng: blank(report.site),     label: '現場名',     el: 'f_site' },
-      { ng: blank(report.client),   label: '発注者・元請', el: 'f_client' },
-      { ng: s == null,              label: '開始時刻',   el: 'f_start' },
-      { ng: e == null,              label: '終了時刻',   el: 'f_end' },
-      { ng: s != null && e != null && e <= s, label: '作業時間（終了が開始より前になっています）', el: 'f_end' },
-      { ng: !report.workers.length, label: '作業員（1名以上選択）', el: 'workerChips' },
-      { ng: blank(report.work),     label: '作業内容',   el: 'f_work' },
-      { ng: blank(report.next),     label: '次の日の予定（なければ「なし」）', el: 'f_next' },
-      { ng: blank(report.memo),     label: '連絡事項（なければ「なし」）', el: 'f_memo' }
-    ].filter(x => x.ng);
+    const list = [
+      { ng: blank(report.date), label: '作業日', el: 'f_date' },
+      { ng: !report.weather,    label: '天候',   el: 'weatherGrid' }
+    ];
+    report.sites.forEach((st, i) => {
+      const pre = report.sites.length > 1 ? '現場' + (i + 1) + '：' : '';
+      const a = toMin(st.start), b = toMin(st.end);
+      list.push(
+        { ng: blank(st.site),   label: pre + '現場名',     el: 's' + i + '_site' },
+        { ng: blank(st.client), label: pre + '発注者・元請', el: 's' + i + '_client' },
+        { ng: a == null,        label: pre + '開始時刻',   el: 's' + i + '_start' },
+        { ng: b == null,        label: pre + '終了時刻',   el: 's' + i + '_end' },
+        { ng: a != null && b != null && b <= a, label: pre + '作業時間（終了が開始より前になっています）', el: 's' + i + '_end' },
+        { ng: !siteWorkers(st).length, label: pre + '作業員（1名以上選択）', el: 's' + i + '_workers' },
+        { ng: blank(st.work),   label: pre + '作業内容',   el: 's' + i + '_work' }
+      );
+    });
+    list.push(
+      { ng: blank(report.next), label: '次の日の予定（なければ「なし」）', el: 'f_next' },
+      { ng: blank(report.memo), label: '連絡事項（なければ「なし」）', el: 'f_memo' }
+    );
+    return list.filter(x => x.ng);
   }
   function markRequired() {
     const bad = checkRequired();
     const badIds = bad.map(x => x.el);
-    ['f_date', 'weatherGrid', 'f_site', 'f_client', 'f_start', 'f_end', 'workerChips', 'f_work', 'f_next', 'f_memo'].forEach(id => {
+    document.querySelectorAll('.invalid, .invalid-box').forEach(el => el.classList.remove('invalid', 'invalid-box'));
+    badIds.forEach(id => {
       const el = $(id);
-      el.classList.toggle(el.classList.contains('text-input') ? 'invalid' : 'invalid-box', badIds.includes(id));
+      if (el) el.classList.add(el.classList.contains('text-input') ? 'invalid' : 'invalid-box');
     });
     return bad;
   }
@@ -584,40 +624,42 @@
     validatedOnce = true;
     const bad = markRequired();
     if (!bad.length) return true;
-    $(bad[0].el).scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const first = $(bad[0].el);
+    if (first) first.scrollIntoView({ behavior: 'smooth', block: 'center' });
     alert('未入力の項目があります。送信できません。\n\n・' + bad.map(x => x.label).join('\n・'));
     return false;
   }
 
-  // ===== 報告書（PDFの中身） =====
-  function buildReportHtml() {
-    const r = report;
+  // ===== 報告書（PDFの中身）現場ごとに1ページ =====
+  function buildSiteHtml(st, idx) {
     const v = s => esc(s || '');
-    const m = workMinutes();
-    const timeHtml = v(r.start) + ' 〜 ' + v(r.end) + (m != null ? '　実働 ' + fmtMinutes(m) : '');
+    const total = report.sites.length;
+    const m = workMinutes(st);
+    const timeHtml = v(st.start) + ' 〜 ' + v(st.end) + (m != null ? '　実働 ' + fmtMinutes(m) : '');
+    const workers = siteWorkers(st);
 
-    // 屋根（面積・棟・換気部材・その他）・雨樋・板金は常に表の形で表示
     const roofRows = [
-      { name: '面積', qty: r.area, unit: '㎡' },
-      { name: '棟', qty: r.ridge, unit: 'm' },
-      { name: '換気部材（種類：' + (r.ventType.trim() ? v(r.ventType.trim()) : '<span style="display:inline-block;width:40mm"></span>') + '）', qty: r.ventQty, unit: '個', html: true }
+      { name: '面積', qty: st.area, unit: '㎡' },
+      { name: '棟', qty: st.ridge, unit: 'm' },
+      { name: '換気部材（種類：' + (st.ventType.trim() ? v(st.ventType.trim()) : '<span style="display:inline-block;width:40mm"></span>') + '）', qty: st.ventQty, unit: '個', html: true }
     ];
-    const others = filledMaterials();
+    const others = filledMaterials(st);
     others.forEach((x, i) => roofRows.push({ name: (i === 0 ? 'その他：' : '') + x.name, qty: x.qty, unit: x.unit }));
     if (!others.length) roofRows.push({ name: 'その他：', qty: '', unit: '' });
     const gutterRows = [
-      { name: '軒樋', qty: r.eave, unit: 'm' },
-      { name: '縦樋', qty: r.down, unit: 'm' },
-      { name: '落ち口', qty: r.outlet, unit: '箇所' },
-      { name: 'バルコニー排水', qty: r.balcony, unit: '箇所' }
+      { name: '軒樋', qty: st.eave, unit: 'm' },
+      { name: '縦樋', qty: st.down, unit: 'm' },
+      { name: '落ち口', qty: st.outlet, unit: '箇所' },
+      { name: 'バルコニー排水', qty: st.balcony, unit: '箇所' }
     ];
-    const sheetRows = sheetItems(r);
+    const sheetRows = sheetItems(st);
     if (!sheetRows.length) sheetRows.push({ name: '', qty: '', unit: 'm' });
     const groupHtml = (label, rows) => rows.map((x, i) =>
       '<tr>' + (i === 0 ? '<td class="c-grp" rowspan="' + rows.length + '">' + label + '</td>' : '') +
       '<td>' + (x.html ? x.name : v(x.name)) + '</td><td class="c-qty">' + v(x.qty) + '</td><td class="c-unit">' + v(x.unit) + '</td></tr>'
     ).join('');
     const matHtml = groupHtml('屋根', roofRows) + groupHtml('雨樋', gutterRows) + groupHtml('板金', sheetRows);
+    const isLast = idx === total - 1;
 
     return '<div class="ps">' +
       '<div class="ps-head">' +
@@ -627,21 +669,24 @@
         '</div>' +
       '</div>' +
       '<table>' +
-        '<tr class="h-sm"><th>作業日</th><td>' + dateLabel(r.date) + '</td><th>天候</th><td>' + v(r.weather) + '</td></tr>' +
-        '<tr class="h-sm"><th>現場名</th><td colspan="3">' + v(r.site) + '</td></tr>' +
-        '<tr class="h-sm"><th>発注者</th><td colspan="3">' + v(r.client) + '</td></tr>' +
+        '<tr class="h-sm"><th>作業日</th><td>' + dateLabel(report.date) + (total > 1 ? '　（' + (idx + 1) + ' / ' + total + ' 軒目）' : '') + '</td><th>天候</th><td>' + v(report.weather) + '</td></tr>' +
+        '<tr class="h-sm"><th>現場名</th><td colspan="3">' + v(st.site) + '</td></tr>' +
+        '<tr class="h-sm"><th>発注者</th><td colspan="3">' + v(st.client) + '</td></tr>' +
         '<tr class="h-sm"><th>作業時間</th><td colspan="3">' + timeHtml + '</td></tr>' +
-        '<tr class="h-sm"><th>作業員</th><td colspan="2">' + v(r.workers.join('、')) + '</td><td style="text-align:right;vertical-align:middle">' + r.workers.length + ' 名</td></tr>' +
-        '<tr class="h-work"><th>作業内容</th><td colspan="3">' + v(r.work) + '</td></tr>' +
+        '<tr class="h-sm"><th>作業員</th><td colspan="2">' + v(workers.join('、')) + '</td><td style="text-align:right;vertical-align:middle">' + workers.length + ' 名</td></tr>' +
+        '<tr class="h-work"><th>作業内容</th><td colspan="3">' + v(st.work) + '</td></tr>' +
       '</table>' +
       '<div class="ps-sec">使用材料</div>' +
       '<table class="mat"><tr><th class="c-grp">区分</th><th>材料名</th><th class="c-qty" style="text-align:center">数量</th><th class="c-unit">単位</th></tr>' + matHtml + '</table>' +
-      '<table style="margin-top:8px">' +
-        '<tr class="h-mid"><th>次の日の予定</th><td>' + v(r.next) + '</td></tr>' +
-        '<tr class="h-mid"><th>連絡事項</th><td>' + v(r.memo) + '</td></tr>' +
-      '</table>' +
+      (isLast
+        ? '<table style="margin-top:8px">' +
+            '<tr class="h-mid"><th>次の日の予定</th><td>' + v(report.next) + '</td></tr>' +
+            '<tr class="h-mid"><th>連絡事項</th><td>' + v(report.memo) + '</td></tr>' +
+          '</table>'
+        : '') +
     '</div>';
   }
+
   // ===== PDF作成 → LINEで送信 =====
   // 報告書を画像にしてA4のPDFに貼る（日本語フォントを埋め込まずに済む）
   const LIBS = [
@@ -661,25 +706,32 @@
     return libsReady;
   }
   function pdfFileName() {
-    const site = report.site.trim().replace(/[\\/:*?"<>|\s]+/g, '_');
-    return '作業報告書_' + report.date + '_' + site + '.pdf';
+    const clean = s => s.trim().replace(/[\\/:*?"<>|\s]+/g, '_');
+    const first = clean(report.sites[0].site);
+    const name = report.sites.length > 1 ? first + '他' + (report.sites.length - 1) + '件' : first;
+    return '作業報告書_' + report.date + '_' + name + '.pdf';
   }
   let pdfFile = null, pdfUrl = null;
   async function makePdf() {
     await loadLibs();
     const box = $('pdfSheet');
-    box.innerHTML = buildReportHtml();
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
-    const canvas = await html2canvas(box, { scale: 2, backgroundColor: '#ffffff' });
-    box.innerHTML = '';
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
     const M = 12, maxW = 210 - M * 2, maxH = 297 - M * 2;
-    let w = maxW, h = canvas.height * maxW / canvas.width;
-    if (h > maxH) { w = w * maxH / h; h = maxH; } // 1枚に収める
-    const img = canvas.toDataURL('image/jpeg', 0.92);
-    pdf.addImage(img, 'JPEG', (210 - w) / 2, M, w, h);
-    return { file: new File([pdf.output('blob')], pdfFileName(), { type: 'application/pdf' }), preview: img };
+    const previews = [];
+    for (let i = 0; i < report.sites.length; i++) {
+      box.innerHTML = buildSiteHtml(report.sites[i], i);
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      const canvas = await html2canvas(box, { scale: 2, backgroundColor: '#ffffff' });
+      const img = canvas.toDataURL('image/jpeg', 0.92);
+      let w = maxW, h = canvas.height * maxW / canvas.width;
+      if (h > maxH) { w = w * maxH / h; h = maxH; } // 1現場につき1枚に収める
+      if (i > 0) pdf.addPage();
+      pdf.addImage(img, 'JPEG', (210 - w) / 2, M, w, h);
+      previews.push(img);
+    }
+    box.innerHTML = '';
+    return { file: new File([pdf.output('blob')], pdfFileName(), { type: 'application/pdf' }), previews };
   }
   function canShareFile(file) {
     try { return !!(navigator.canShare && navigator.canShare({ files: [file] })); } catch (e) { return false; }
@@ -698,9 +750,9 @@
       pdfFile = out.file;
       if (pdfUrl) URL.revokeObjectURL(pdfUrl);
       pdfUrl = URL.createObjectURL(pdfFile);
-      $('pdfTitle').textContent = 'PDFができました';
+      $('pdfTitle').textContent = 'PDFができました' + (out.previews.length > 1 ? '（' + out.previews.length + 'ページ）' : '');
       $('pdfFileName').textContent = pdfFile.name;
-      $('pdfPreview').innerHTML = '<img src="' + out.preview + '" alt="作業報告書">';
+      $('pdfPreview').innerHTML = out.previews.map(src => '<img src="' + src + '" alt="作業報告書" style="margin-bottom:8px">').join('');
       const saveBtn = $('pdfSaveBtn');
       saveBtn.href = pdfUrl; saveBtn.download = pdfFile.name;
       if (canShareFile(pdfFile)) {
@@ -733,25 +785,50 @@
 
   // ===== 新規 =====
   function isDirty() {
-    return !!(report.site.trim() || report.work.trim() || report.next.trim() || report.memo.trim());
+    return !!(report.next.trim() || report.memo.trim() || report.sites.some(st => st.site.trim() || st.work.trim()));
   }
   function resetForm() {
     if (isDirty() && !confirm('入力中の内容を消して、新しい報告書を作りますか？\n（送信済みのPDFには影響しません）')) return;
-    const keep = report; // 現場名・発注者・作業員は続けて使うことが多いので引き継ぐ
+    const workers = report.workers.slice(); // 作業員は続けて使うことが多いので引き継ぐ
     report = emptyReport();
-    report.site = keep.site; report.client = keep.client; report.workers = keep.workers.slice();
+    report.workers = workers;
     renderAll(); saveDraft();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    toast('新しい報告書（現場名・作業員は引き継ぎ）');
+    toast('新しい報告書（作業員は引き継ぎ）');
   }
 
   // ===== 起動 =====
+  function normalize(d) {
+    const r = Object.assign(emptyReport(), d);
+    if (!Array.isArray(r.sites) || !r.sites.length) r.sites = [emptySite()];
+    r.sites = r.sites.map(st => {
+      const t = Object.assign(emptySite(), st);
+      if (!Array.isArray(t.materials) || !t.materials.length) t.materials = [{ name: '', qty: '', unit: '' }];
+      if (!Array.isArray(t.sheet) || !t.sheet.length) t.sheet = [{ name: '', len: '' }];
+      if (!Array.isArray(t.workers)) t.workers = [];
+      return t;
+    });
+    if (!Array.isArray(r.workers)) r.workers = [];
+    return r;
+  }
+  function migrateOldDraft(d) {
+    // 1現場だけの古い下書きを、現場1件の形に移し替える
+    const st = Object.assign(emptySite(), {
+      site: d.site, client: d.client, start: d.start, end: d.end, work: d.work,
+      area: d.area, ridge: d.ridge, ventType: d.ventType, ventQty: d.ventQty,
+      eave: d.eave, down: d.down, outlet: d.outlet, balcony: d.balcony,
+      materials: d.materials, sheet: d.sheet, sameAsDay: true, workers: []
+    });
+    return { date: d.date, weather: d.weather, workers: d.workers || [], sites: [st], next: d.next, memo: d.memo };
+  }
   (function init() {
-    const draft = loadJSON(DRAFT_KEY, null);
-    if (draft) report = Object.assign(emptyReport(), draft);
-    if (!report.materials || !report.materials.length) report.materials = [{ name: '', qty: '', unit: '' }];
-    if (!report.sheet || !report.sheet.length) report.sheet = [{ name: '', len: '' }];
-    bindTextFields();
+    let draft = loadJSON(DRAFT_KEY, null);
+    if (!draft) {
+      const old = loadJSON(OLD_DRAFT_KEY, null);
+      if (old && !old.sites) draft = migrateOldDraft(old);
+    }
+    if (draft) report = normalize(draft);
+    bindCommonFields();
     renderAll();
   })();
 </script>
