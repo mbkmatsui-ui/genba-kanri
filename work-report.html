@@ -6,7 +6,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="作業報告書">
-  <title>作業報告書</title>
+  <meta name="theme-color" content="#15803d">
+  <title>MBK松井板金工業 作業報告書</title>
+  <link rel="manifest" href="work-report.webmanifest">
+  <link rel="apple-touch-icon" href="icons/wr-apple-touch-180.png">
+  <link rel="icon" type="image/png" sizes="64x64" href="icons/wr-64.png">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -29,6 +33,7 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     }
     .app-header .icon { font-size: 28px; }
+    .app-header .company { font-size: 12px; font-weight: 700; letter-spacing: 1px; opacity: 0.95; margin-bottom: 2px; }
     .app-header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.5px; }
     .app-header p { font-size: 12px; opacity: 0.9; margin-top: 2px; }
 
@@ -188,8 +193,9 @@
 <body>
 <div class="wrap">
   <div class="app-header">
-    <div class="icon">📝</div>
+    <img src="icons/wr-192.png" alt="" style="width:44px;height:44px;border-radius:10px;flex-shrink:0">
     <div>
+      <div class="company">MBK松井板金工業</div>
       <h1>作業報告書</h1>
       <p>入力 → PDFにしてLINEグループへ送信</p>
     </div>

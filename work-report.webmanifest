@@ -1,0 +1,14 @@
+{
+  "name": "MBK松井板金工業 作業報告書",
+  "short_name": "作業報告書",
+  "start_url": "./work-report.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#065f46",
+  "theme_color": "#15803d",
+  "icons": [
+    { "src": "icons/wr-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/wr-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/wr-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
