@@ -224,10 +224,6 @@
           <label class="label" for="f_end">終了<span class="req">*</span></label>
           <input type="time" id="f_end" class="text-input">
         </div>
-        <div class="field">
-          <label class="label" for="f_break">休憩（分）<span class="req">*</span></label>
-          <input type="number" id="f_break" class="text-input" inputmode="numeric" min="0" step="10">
-        </div>
       </div>
       <div class="time-summary" id="timeSummary"></div>
     </div>
@@ -353,7 +349,7 @@
   const DOW = ['日','月','火','水','木','金','土'];
 
   const $ = id => document.getElementById(id);
-  const TEXT_FIELDS = ['f_date', 'f_site', 'f_client', 'f_start', 'f_end', 'f_break', 'f_work', 'f_area', 'f_ridge', 'f_ventType', 'f_ventQty', 'f_eave', 'f_down', 'f_outlet', 'f_balcony', 'f_next', 'f_memo'];
+  const TEXT_FIELDS = ['f_date', 'f_site', 'f_client', 'f_start', 'f_end', 'f_work', 'f_area', 'f_ridge', 'f_ventType', 'f_ventQty', 'f_eave', 'f_down', 'f_outlet', 'f_balcony', 'f_next', 'f_memo'];
 
   let report = emptyReport();
   let roster = loadJSON(WORKERS_KEY, []);
@@ -362,7 +358,7 @@
   function emptyReport() {
     return {
       date: todayStr(), weather: '', site: '', client: '',
-      start: '08:00', end: '17:00', break: '60',
+      start: '08:00', end: '17:00',
       workers: [], work: '', area: '', ridge: '', ventType: '', ventQty: '', eave: '', down: '', outlet: '', balcony: '', sheet: [{ name: '', len: '' }], materials: [{ name: '', qty: '', unit: '' }],
       next: '', memo: ''
     };
@@ -396,7 +392,7 @@
     const toMin = t => { const m = /^(\d{1,2}):(\d{2})$/.exec(t || ''); return m ? (+m[1]) * 60 + (+m[2]) : null; };
     const s = toMin(report.start), e = toMin(report.end);
     if (s == null || e == null || e <= s) return null;
-    return Math.max(0, e - s - (parseInt(report.break, 10) || 0));
+    return e - s;
   }
   function fmtMinutes(m) {
     return Math.floor(m / 60) + '時間' + (m % 60 ? (m % 60) + '分' : '');
@@ -529,12 +525,12 @@
   }
 
   function bindTextFields() {
-    const map = { f_date: 'date', f_site: 'site', f_client: 'client', f_start: 'start', f_end: 'end', f_break: 'break',
+    const map = { f_date: 'date', f_site: 'site', f_client: 'client', f_start: 'start', f_end: 'end',
                   f_work: 'work', f_area: 'area', f_ridge: 'ridge', f_ventType: 'ventType', f_ventQty: 'ventQty', f_eave: 'eave', f_down: 'down', f_outlet: 'outlet', f_balcony: 'balcony', f_next: 'next', f_memo: 'memo' };
     TEXT_FIELDS.forEach(id => {
       $(id).addEventListener('input', () => {
         report[map[id]] = $(id).value;
-        if (id === 'f_start' || id === 'f_end' || id === 'f_break') renderTime();
+        if (id === 'f_start' || id === 'f_end') renderTime();
         saveDraft();
       });
     });
@@ -542,7 +538,7 @@
   }
   function fillTextFields() {
     $('f_date').value = report.date; $('f_site').value = report.site; $('f_client').value = report.client;
-    $('f_start').value = report.start; $('f_end').value = report.end; $('f_break').value = report.break;
+    $('f_start').value = report.start; $('f_end').value = report.end;
     $('f_work').value = report.work;
     $('f_area').value = report.area; $('f_ridge').value = report.ridge; $('f_ventType').value = report.ventType; $('f_ventQty').value = report.ventQty;
     $('f_eave').value = report.eave; $('f_down').value = report.down;
@@ -569,7 +565,6 @@
       { ng: s == null,              label: '開始時刻',   el: 'f_start' },
       { ng: e == null,              label: '終了時刻',   el: 'f_end' },
       { ng: s != null && e != null && e <= s, label: '作業時間（終了が開始より前になっています）', el: 'f_end' },
-      { ng: blank(report.break) || +report.break < 0, label: '休憩（なければ 0）', el: 'f_break' },
       { ng: !report.workers.length, label: '作業員（1名以上選択）', el: 'workerChips' },
       { ng: blank(report.work),     label: '作業内容',   el: 'f_work' },
       { ng: blank(report.next),     label: '次の日の予定（なければ「なし」）', el: 'f_next' },
@@ -579,7 +574,7 @@
   function markRequired() {
     const bad = checkRequired();
     const badIds = bad.map(x => x.el);
-    ['f_date', 'weatherGrid', 'f_site', 'f_client', 'f_start', 'f_end', 'f_break', 'workerChips', 'f_work', 'f_next', 'f_memo'].forEach(id => {
+    ['f_date', 'weatherGrid', 'f_site', 'f_client', 'f_start', 'f_end', 'workerChips', 'f_work', 'f_next', 'f_memo'].forEach(id => {
       const el = $(id);
       el.classList.toggle(el.classList.contains('text-input') ? 'invalid' : 'invalid-box', badIds.includes(id));
     });
@@ -599,7 +594,7 @@
     const r = report;
     const v = s => esc(s || '');
     const m = workMinutes();
-    const timeHtml = v(r.start) + ' 〜 ' + v(r.end) + '（休憩 ' + v(String(r.break)) + ' 分）' + (m != null ? '　実働 ' + fmtMinutes(m) : '');
+    const timeHtml = v(r.start) + ' 〜 ' + v(r.end) + (m != null ? '　実働 ' + fmtMinutes(m) : '');
 
     // 屋根（面積・棟・換気部材・その他）・雨樋・板金は常に表の形で表示
     const roofRows = [
