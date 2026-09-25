@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2e2e2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="現場管理">
+<title>現場管理</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="../icons/apple-touch-icon-180.png">
+<link rel="icon" href="../icons/icon-192.png">
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#f4f4f2; --card:#fff; --text:#1f1f1f; --sub:#6b6b6b; --line:#e2e2de;
+  --dark:#2e2e2e; --accent:#2563eb; --danger:#dc2626; --ok:#16a34a; --today:#fff4d6;
+  --r:10px; --cell:34px; --label:150px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;-webkit-text-size-adjust:100%}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.hidden{display:none!important}
+
+/* ヘッダー・ナビ */
+header{position:sticky;top:0;z-index:20;background:var(--dark);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 16px;padding-top:calc(10px + env(safe-area-inset-top))}
+header h1{font-size:17px;margin:0;flex:1}
+#sync{font-size:12px;opacity:.8}
+#sync.off{color:#fca5a5;opacity:1}
+nav{display:flex;gap:4px;background:var(--dark);padding:0 12px 8px;overflow-x:auto}
+nav button{background:none;border:0;color:#bbb;padding:6px 12px;border-radius:8px;white-space:nowrap}
+nav button.on{background:#fff;color:var(--dark);font-weight:600}
+main{padding:16px;max-width:1200px;margin:0 auto;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+
+/* 共通部品 */
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.bar h2{font-size:18px;margin:0;flex:1}
+.btn{border:1px solid var(--line);background:#fff;border-radius:8px;padding:7px 12px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.danger{color:var(--danger);border-color:#fecaca}
+.btn.small{padding:3px 9px;font-size:13px}
+select.btn{padding:6px 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;margin-bottom:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.grid .card{margin:0}
+.muted{color:var(--sub);font-size:13px}
+.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:#eee;margin-right:4px}
+.tag.active{background:#dbeafe;color:#1d4ed8}.tag.pending{background:#f3f4f6}.tag.completed{background:#dcfce7;color:#15803d}
+.empty{text-align:center;color:var(--sub);padding:40px 0}
+a{color:var(--accent)}
+.pcard h3{margin:0 0 4px;font-size:16px;display:flex;align-items:center}
+.pcard .acts{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.today-list{margin:6px 0 0;padding-left:18px;font-size:13px}
+
+/* タイムライン（工程表・スケジュール共通） */
+.tl-wrap{overflow:auto;background:#fff;border:1px solid var(--line);border-radius:var(--r);max-height:calc(100vh - 200px)}
+table.tl{border-collapse:separate;border-spacing:0;font-size:12px}
+.tl th,.tl td{border-right:1px solid #eee;border-bottom:1px solid #eee;min-width:var(--cell);width:var(--cell);height:30px;padding:0;text-align:center}
+.tl thead th{position:sticky;top:0;background:#fafafa;z-index:2;font-weight:500}
+.tl thead tr:nth-child(2) th{top:22px}
+.tl thead tr:first-child th{height:22px}
+.tl .lbl{position:sticky;left:0;background:#fff;z-index:1;min-width:var(--label);width:var(--label);max-width:var(--label);text-align:left;padding:0 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl thead .lbl{z-index:3;background:#fafafa}
+.tl .grp td.lbl{font-weight:600;background:#f7f7f5}
+.tl .sun{color:#dc2626}.tl .sat{color:#2563eb}
+.tl td.we{background:#fafafa}
+.tl .today{background:var(--today)!important}
+.tl td.on{position:relative}
+.tl td.on::after{content:"";position:absolute;left:0;right:0;top:6px;bottom:6px;background:var(--c)}
+.tl td.on.s::after{left:3px;border-top-left-radius:6px;border-bottom-left-radius:6px}
+.tl td.on.e::after{right:3px;border-top-right-radius:6px;border-bottom-right-radius:6px}
+.tl tr.clickable{cursor:pointer}
+.tl tr.clickable:hover td.lbl{text-decoration:underline}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;margin:8px 0}
+
+/* モーダル */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:50;display:flex;align-items:flex-end;justify-content:center}
+@media(min-width:700px){.modal{align-items:center}}
+.sheet{background:#fff;width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:14px 14px 0 0;padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+@media(min-width:700px){.sheet{border-radius:14px}}
+.sheet h3{margin:0 0 12px}
+.f{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.f label{display:flex;flex-direction:column;font-size:12px;color:var(--sub);gap:3px}
+.f .full{grid-column:1/-1}
+.f input,.f select,.f textarea{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:15px;color:var(--text);background:#fff;width:100%}
+.trow{display:grid;grid-template-columns:1.3fr 1fr 1fr 1fr 34px;grid-template-areas:"n s a b x";gap:6px;margin-bottom:6px;align-items:center}
+.trow .tn{grid-area:n}.trow .ts{grid-area:s}.trow .ta{grid-area:a}.trow .tb{grid-area:b}.trow button{grid-area:x}
+.trow input,.trow select{border:1px solid var(--line);border-radius:6px;padding:6px;font-size:14px;width:100%;min-width:0}
+@media(max-width:560px){.trow{grid-template-columns:1fr 1fr 34px;grid-template-areas:"n s x" "a b x";padding-bottom:8px;border-bottom:1px dashed var(--line)}:root{--label:110px}}
+.sheet .foot{display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap}
+.sheet .foot .left{margin-right:auto}
+
+/* ログイン */
+#login{position:fixed;inset:0;background:var(--dark);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;z-index:100;padding:20px;text-align:center}
+#login button{background:#fff;color:#222;border:0;border-radius:10px;padding:12px 22px;font-size:16px}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;z-index:200;font-size:14px;max-width:90vw}
+#toast.err{background:var(--danger)}
+</style>
+</head>
+<body>
+
+<div id="login">
+  <h2 style="margin:0">現場管理</h2>
+  <p id="login-msg" class="muted" style="color:#ccc">Google アカウントでログインしてください</p>
+  <button id="login-btn">Google でログイン</button>
+  <button id="logout-btn2" class="hidden" style="background:none;color:#ccc;border:1px solid #666">別のアカウントでログイン</button>
+</div>
+
+<header>
+  <h1>現場管理</h1>
+  <span id="sync">接続中…</span>
+  <button class="btn small" id="menu-btn" style="background:none;color:#fff;border-color:#555">⋯</button>
+</header>
+<nav id="nav">
+  <button data-v="home" class="on">ホーム</button>
+  <button data-v="gantt">工程表</button>
+  <button data-v="schedule">全体スケジュール</button>
+  <button data-v="done">完了履歴</button>
+  <button data-v="clients">発注者</button>
+</nav>
+<main id="main"></main>
+<div id="modal" class="modal hidden"><div class="sheet" id="sheet"></div></div>
+<div id="toast" class="hidden"></div>
+
+<script>
+/* =========================================================
+   現場管理 v2 ― シンプル版
+   データ構造（Firebase Realtime Database）
+     v2/projects/{id}  案件
+     v2/tasks/{id}     工程（projectId で案件に紐づく）
+     v2/clients/{id}   発注者
+     v2/archived/{id}  完了案件（tasks を内包）
+   ルール：1件ずつ保存する。丸ごと上書き・独自キャッシュはしない。
+   ========================================================= */
+
+firebase.initializeApp({
+  apiKey: "AIzaSyDeG2WPHnotn7NTGubaemGxilbtI9YtEAE",
+  authDomain: "genba-kanri-963a8.firebaseapp.com",
+  databaseURL: "https://genba-kanri-963a8-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "genba-kanri-963a8",
+  storageBucket: "genba-kanri-963a8.firebasestorage.app",
+  messagingSenderId: "3828255104",
+  appId: "1:3828255104:web:ea0a05e38c8cd9673e5965"
+});
+var auth = firebase.auth();
+var db = firebase.database();
+var ROOT = 'v2';
+var ADMIN_EMAIL = 'mbk.matsui@gmail.com';
+
+var TASK_NAMES = ['屋根工事','雨樋工事','足場工事','板金工事','塗装工事','シーリング工事','外壁工事','ルーフィング'];
+var TASK_COLORS = {'屋根工事':'#b45309','雨樋工事':'#0891b2','足場工事':'#6b7280','板金工事':'#374151','塗装工事':'#db2777','シーリング工事':'#7c3aed','外壁工事':'#059669','ルーフィング':'#1d4ed8'};
+var STAFF = ['社長','汐海'];
+var CATEGORIES = ['新築工事','改修工事','修繕工事','増築工事'];
+var STATUS = {pending:'計画中', active:'進行中', completed:'完了'};
+
+// 画面状態とデータ（Firebase から届いたものをそのまま持つだけ）
+var S = { view:'home', ganttProject:'', schedStaff:'all', loaded:{} };
+var D = { projects:{}, tasks:{}, clients:{}, archived:{} };
+
+/* ---------- 小道具 ---------- */
+function $(s){ return document.querySelector(s); }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function vals(o){ return Object.keys(o||{}).map(function(k){ return o[k]; }).filter(Boolean); }
+function newId(p){ return p + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function pad(n){ return (n<10?'0':'')+n; }
+function ymd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
+function parse(s){ var a=String(s).split('-'); return new Date(+a[0], +a[1]-1, +a[2]); }
+function today(){ return ymd(new Date()); }
+function addDays(s,n){ var d=parse(s); d.setDate(d.getDate()+n); return ymd(d); }
+function md(s){ if(!s) return ''; var d=parse(s); return (d.getMonth()+1)+'/'+d.getDate(); }
+function taskColor(t){ return TASK_COLORS[t.name] || '#64748b'; }
+function byStart(a,b){ return (a.startDate||'9').localeCompare(b.startDate||'9'); }
+function tasksOf(pid){ return vals(D.tasks).filter(function(t){ return t.projectId===pid; }).sort(byStart); }
+function mapUrl(loc){ return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(loc); }
+
+var _tt;
+function toast(msg, err){
+  var el=$('#toast'); el.textContent=msg; el.className=err?'err':''; clearTimeout(_tt);
+  _tt=setTimeout(function(){ el.className='hidden'; }, err?5000:2200);
+}
+
+/* ---------- 保存（すべてここを通す） ---------- */
+function ref(path){ return db.ref(ROOT+'/'+path); }
+function save(updates, okMsg){
+  // updates: { 'projects/xxx': {...}, 'tasks/yyy': null, ... } を一括で書き込む
+  var u={}; Object.keys(updates).forEach(function(k){ u[ROOT+'/'+k]=updates[k]; });
+  return db.ref().update(u).then(function(){ if(okMsg) toast(okMsg); })
+    .catch(function(e){ toast('保存できませんでした：'+(e&&e.message||e), true); throw e; });
+}
+
+/* ---------- 同期（Firebase 標準のリアルタイム購読のみ） ---------- */
+function subscribe(){
+  ['projects','tasks','clients','archived'].forEach(function(k){
+    ref(k).on('value', function(snap){
+      D[k] = snap.val() || {};
+      S.loaded[k] = true;
+      render();
+    }, function(err){
+      if (err && err.code==='PERMISSION_DENIED') denied();
+      else toast('読み込みエラー：'+err.message, true);
+    });
+  });
+  db.ref('.info/connected').on('value', function(s){
+    var el=$('#sync');
+    if (s.val()) { el.textContent='同期中'; el.className=''; }
+    else { el.textContent='オフライン（復帰時に自動送信）'; el.className='off'; }
+  });
+}
+function denied(){
+  $('#login').classList.remove('hidden');
+  $('#login-msg').innerHTML = esc(auth.currentUser && auth.currentUser.email)+' にはアクセス権がありません。<br>管理者にメンバー追加を依頼してください。';
+  $('#login-btn').classList.add('hidden');
+  $('#logout-btn2').classList.remove('hidden');
+}
+
+/* ---------- 画面切替 ---------- */
+document.getElementById('nav').addEventListener('click', function(e){
+  var b=e.target.closest('button'); if(!b) return; go(b.dataset.v);
+});
+function go(v, opt){
+  S.view=v; if(opt&&opt.project) S.ganttProject=opt.project;
+  document.querySelectorAll('#nav button').forEach(function(b){ b.classList.toggle('on', b.dataset.v===v); });
+  render(); window.scrollTo(0,0);
+}
+function render(){
+  if (!S.loaded.projects || !S.loaded.tasks) { $('#main').innerHTML='<p class="empty">読み込み中…</p>'; return; }
+  var f={home:viewHome, gantt:viewGantt, schedule:viewSchedule, done:viewDone, clients:viewClients}[S.view];
+  $('#main').innerHTML = f();
+  if (S.view==='gantt'||S.view==='schedule') scrollToToday();
+}
+
+/* ---------- ホーム：案件一覧 ---------- */
+function viewHome(){
+  var t=today();
+  var list=vals(D.projects).sort(function(a,b){
+    var o={active:0,pending:1,completed:2}; return (o[a.status]||0)-(o[b.status]||0) || byStart(a,b);
+  });
+  var todays=vals(D.tasks).filter(function(x){ return x.startDate<=t && t<=(x.endDate||x.startDate) && D.projects[x.projectId]; });
+  var h='<div class="bar"><h2>案件（'+list.length+'）</h2><button class="btn primary" onclick="editProject()">＋ 新規案件</button></div>';
+  h+='<div class="card"><b>今日の作業</b> <span class="muted">'+md(t)+'</span>';
+  h+= todays.length ? '<ul class="today-list">'+todays.map(function(x){
+        return '<li><span class="dot" style="background:'+taskColor(x)+'"></span>'+esc(D.projects[x.projectId].name)+' — '+esc(x.name)+(x.supervisor?'（'+esc(x.supervisor)+'）':'')+'</li>';
+      }).join('')+'</ul>' : '<div class="muted">予定されている作業はありません</div>';
+  h+='</div>';
+  if (!list.length) return h+'<p class="empty">案件がありません。「＋ 新規案件」から追加してください。'+(isAdmin()?'<br>旧アプリのデータは右上「⋯」→「旧データ取り込み」で移せます。':'')+'</p>';
+  h+='<div class="grid">'+list.map(function(p){
+    var ts=tasksOf(p.id);
+    var range = (p.startDate||(ts[0]&&ts[0].startDate)) ? md(p.startDate||ts[0].startDate)+' 〜 '+md(p.endDate||(ts.length?ts[ts.length-1].endDate:'')) : '期間未定';
+    return '<div class="card pcard"><h3><span class="dot" style="background:'+esc(p.color||'#2563eb')+'"></span>'+esc(p.name)+'</h3>'+
+      '<div><span class="tag '+esc(p.status)+'">'+(STATUS[p.status]||'進行中')+'</span><span class="muted">'+esc(range)+'　工程 '+ts.length+'件</span></div>'+
+      (p.client?'<div class="muted">発注者：'+esc(p.client)+'</div>':'')+
+      (p.location?'<div class="muted">所在地：<a href="'+mapUrl(p.location)+'" target="_blank" rel="noopener">'+esc(p.location)+'</a></div>':'')+
+      (p.assignee?'<div class="muted">担当：'+esc(p.assignee)+'</div>':'')+
+      '<div class="acts"><button class="btn small" onclick="go(\'gantt\',{project:\''+p.id+'\'})">工程表</button>'+
+      '<button class="btn small" onclick="editProject(\''+p.id+'\')">編集</button>'+
+      '<button class="btn small" onclick="completeProject(\''+p.id+'\')">✓ 完了</button></div></div>';
+  }).join('')+'</div>';
+  return h;
+}
+
+/* ---------- タイムライン描画（工程表・スケジュール共通） ---------- */
+// rows: [{label, sub, group:true} or {label, bars:[{s,e,c,title}], onclick}]
+function timeline(rows, from, to){
+  var days=[]; for (var d=from; d<=to; d=addDays(d,1)) days.push(d);
+  var t=today(), W='日月火水木金土';
+  var h='<div class="tl-wrap" id="tl"><table class="tl"><thead><tr><th class="lbl"></th>';
+  // 月見出し
+  var i=0; while(i<days.length){ var m=days[i].slice(0,7), n=0; while(i+n<days.length && days[i+n].slice(0,7)===m) n++;
+    h+='<th colspan="'+n+'" style="text-align:left;padding-left:6px">'+(+m.slice(5))+'月</th>'; i+=n; }
+  h+='</tr><tr><th class="lbl"></th>'+days.map(function(d){
+    var w=parse(d).getDay(); return '<th class="'+(w===0?'sun':w===6?'sat':'')+(d===t?' today':'')+'"'+(d===t?' data-today="1"':'')+'>'+(+d.slice(8))+'<br>'+W[w]+'</th>';
+  }).join('')+'</tr></thead><tbody>';
+  rows.forEach(function(r){
+    if (r.group){ h+='<tr class="grp"><td class="lbl" title="'+esc(r.label)+'">'+esc(r.label)+'</td><td colspan="'+days.length+'" style="text-align:left;padding-left:6px" class="muted">'+esc(r.sub||'')+'</td></tr>'; return; }
+    h+='<tr'+(r.onclick?' class="clickable" onclick="'+r.onclick+'"':'')+'><td class="lbl" title="'+esc(r.label)+'">'+(r.color?'<span class="dot" style="background:'+esc(r.color)+'"></span>':'')+esc(r.label)+'</td>';
+    days.forEach(function(d){
+      var w=parse(d).getDay(), cls=(w===0||w===6)?'we':'', st='', tip='';
+      for (var k=0;k<(r.bars||[]).length;k++){ var b=r.bars[k], e=b.e||b.s;
+        if (b.s && b.s<=d && d<=e){ cls+=' on'+(d===b.s?' s':'')+(d===e?' e':''); st=' style="--c:'+esc(b.c)+'"'; tip=b.title||''; break; } }
+      if (d===t) cls+=' today';
+      h+='<td class="'+cls+'"'+st+(tip?' title="'+esc(tip)+'"':'')+'></td>';
+    });
+    h+='</tr>';
+  });
+  return h+'</tbody></table></div>';
+}
+function scrollToToday(){
+  var wrap=$('#tl'), th=wrap&&wrap.querySelector('[data-today]');
+  if (th) var lbl=wrap.querySelector('thead .lbl').offsetWidth, cell=th.offsetWidth;
+  wrap.scrollLeft = Math.max(0, th.offsetLeft - lbl - cell*3);
+}
+function legend(){
+  return '<div class="legend">'+TASK_NAMES.map(function(n){ return '<span><span class="dot" style="background:'+TASK_COLORS[n]+'"></span>'+n+'</span>'; }).join('')+'</div>';
+}
+
+/* ---------- 工程表：1案件の工程 ---------- */
+function viewGantt(){
+  var ps=vals(D.projects).sort(byStart);
+  if (!ps.length) return '<p class="empty">案件がありません</p>';
+  if (!D.projects[S.ganttProject]) S.ganttProject = ps[0].id;
+  var p=D.projects[S.ganttProject], ts=tasksOf(p.id);
+  var h='<div class="bar"><select class="btn" onchange="S.ganttProject=this.value;render()">'+
+    ps.map(function(x){ return '<option value="'+x.id+'"'+(x.id===p.id?' selected':'')+'>'+esc(x.name)+'</option>'; }).join('')+'</select>'+
+    '<span style="flex:1"></span><button class="btn" onclick="editTask(\'\',\''+p.id+'\')">＋ 工程</button><button class="btn" onclick="editProject(\''+p.id+'\')">案件を編集</button><button class="btn" onclick="window.print()">印刷</button></div>';
+  if (!ts.length) return h+'<p class="empty">工程がありません。「＋ 工程」から追加してください。</p>';
+  var dates=ts.map(function(t){return t.startDate;}).concat(ts.map(function(t){return t.endDate;})).filter(Boolean).sort();
+  var from=addDays(dates[0]||today(),-3), to=addDays(dates[dates.length-1]||today(),7);
+  if (today()<from) from=today(); if (today()>to) to=today();
+  var rows=ts.map(function(t){
+    return { label:t.name+(t.supervisor?'（'+t.supervisor+'）':''), color:taskColor(t), onclick:"editTask('"+t.id+"')",
+      bars:[{s:t.startDate,e:t.endDate,c:taskColor(t),title:t.name+' '+md(t.startDate)+'〜'+md(t.endDate)}] };
+  });
+  return h+'<p class="muted" style="margin:0 0 8px">工程名をタップすると編集できます</p>'+timeline(rows, from, to);
+}
+
+/* ---------- 全体スケジュール：全案件 ---------- */
+function viewSchedule(){
+  var from=addDays(today(),-62), to=addDays(today(),90);
+  var h='<div class="bar"><h2>全体スケジュール</h2><select class="btn" onchange="S.schedStaff=this.value;render()">'+
+    ['all'].concat(STAFF).map(function(s){ return '<option value="'+s+'"'+(S.schedStaff===s?' selected':'')+'>'+(s==='all'?'全員':esc(s))+'</option>'; }).join('')+'</select></div>';
+  var rows=[];
+  vals(D.projects).filter(function(p){ return p.status!=='completed'; }).sort(byStart).forEach(function(p){
+    var ts=tasksOf(p.id).filter(function(t){ return S.schedStaff==='all' || t.supervisor===S.schedStaff; });
+    if (!ts.length && S.schedStaff!=='all') return;
+    rows.push({ label:p.name, color:p.color, onclick:"go('gantt',{project:'"+p.id+"'})",
+      bars: ts.map(function(t){ return {s:t.startDate,e:t.endDate,c:taskColor(t),title:t.name+(t.supervisor?'（'+t.supervisor+'）':'')+' '+md(t.startDate)+'〜'+md(t.endDate)}; }) });
+  });
+  if (!rows.length) return h+'<p class="empty">表示する案件がありません</p>';
+  return h+legend()+timeline(rows, from, to);
+}
+
+/* ---------- 完了履歴 ---------- */
+function viewDone(){
+  var list=vals(D.archived).sort(function(a,b){ return (b.completedAt||'').localeCompare(a.completedAt||''); });
+  var h='<div class="bar"><h2>完了履歴（'+list.length+'）</h2></div>';
+  if (!list.length) return h+'<p class="empty">完了した案件はまだありません</p>';
+  var byMonth={}; list.forEach(function(a){ var m=a.completedMonth||(a.completedAt||'').slice(0,7)||'不明'; (byMonth[m]=byMonth[m]||[]).push(a); });
+  Object.keys(byMonth).sort().reverse().forEach(function(m){
+    h+='<h3 style="font-size:15px;margin:16px 0 8px">'+(m==='不明'?m:m.slice(0,4)+'年'+(+m.slice(5))+'月')+'（'+byMonth[m].length+'件）</h3>';
+    byMonth[m].forEach(function(a){
+      h+='<div class="card"><b>'+esc(a.name)+'</b> <span class="muted">完了 '+esc(a.completedAt||'')+(a.client?'　'+esc(a.client):'')+'</span>'+
+        '<div class="acts" style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap"><button class="btn small" onclick="showArchived(\''+a.id+'\')">工程を見る</button>'+
+        '<button class="btn small" onclick="restoreProject(\''+a.id+'\')">↩ 進行中に戻す</button>'+
+        '<button class="btn small danger" onclick="deleteArchived(\''+a.id+'\')">削除</button></div></div>';
+    });
+  });
+  return h;
+}
+function showArchived(id){
+  var a=D.archived[id]; if(!a) return;
+  var ts=vals(a.tasks).sort(byStart);
+  openModal('<h3>'+esc(a.name)+'</h3><p class="muted">'+esc(a.startDate||'')+' 〜 '+esc(a.completedAt||'')+(a.location?'　'+esc(a.location):'')+'</p>'+
+    (ts.length ? '<table style="width:100%;border-collapse:collapse;font-size:14px">'+ts.map(function(t){
+      return '<tr style="border-bottom:1px solid #eee"><td style="padding:6px 0"><span class="dot" style="background:'+taskColor(t)+'"></span>'+esc(t.name)+'</td><td>'+md(t.startDate)+'〜'+md(t.endDate)+'</td><td>'+esc(t.supervisor||'')+'</td></tr>';
+    }).join('')+'</table>' : '<p class="muted">工程の記録はありません</p>')+
+    '<div class="foot"><button class="btn" onclick="closeModal()">閉じる</button></div>');
+}
+
+/* ---------- 発注者 ---------- */
+function viewClients(){
+  var list=vals(D.clients).sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','ja'); });
+  var h='<div class="bar"><h2>発注者（'+list.length+'）</h2><button class="btn primary" onclick="editClient()">＋ 追加</button></div>';
+  if (!list.length) return h+'<p class="empty">発注者が登録されていません</p>';
+  return h+list.map(function(c){
+    var n=vals(D.projects).filter(function(p){ return p.clientId===c.id; }).length;
+    return '<div class="card" style="display:flex;align-items:center;gap:8px"><span class="dot" style="background:'+esc(c.color||'#999')+'"></span><div style="flex:1"><b>'+esc(c.name)+'</b>'+
+      (c.note?'<div class="muted">'+esc(c.note)+'</div>':'')+'<div class="muted">案件 '+n+'件</div></div><button class="btn small" onclick="editClient(\''+c.id+'\')">編集</button></div>';
+  }).join('');
+}
+function editClient(id){
+  var c=D.clients[id]||{};
+  openModal('<h3>'+(id?'発注者を編集':'発注者を追加')+'</h3><div class="f">'+
+    '<label class="full">名前<input id="c-name" value="'+esc(c.name)+'"></label>'+
+    '<label>色<input id="c-color" type="color" value="'+esc(c.color||'#2563eb')+'"></label>'+
+    '<label class="full">メモ<textarea id="c-note" rows="2">'+esc(c.note)+'</textarea></label></div>'+
+    '<div class="foot">'+(id?'<button class="btn danger left" onclick="deleteClient(\''+id+'\')">削除</button>':'')+
+    '<button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="saveClient(\''+(id||'')+'\')">保存</button></div>');
+}
+function saveClient(id){
+  var name=$('#c-name').value.trim(); if(!name) return toast('名前を入力してください', true);
+  id=id||newId('c'); var u={};
+  u['clients/'+id+'/id']=id; u['clients/'+id+'/name']=name;
+  u['clients/'+id+'/color']=$('#c-color').value; u['clients/'+id+'/note']=$('#c-note').value.trim();
+  // 案件側に保存している発注者名も合わせて更新
+  vals(D.projects).forEach(function(p){ if(p.clientId===id) u['projects/'+p.id+'/client']=name; });
+  save(u,'保存しました').then(closeModal);
+}
+function deleteClient(id){
+  if(!confirm('この発注者を削除しますか？（案件は残ります）')) return;
+  var u={}; u['clients/'+id]=null; save(u,'削除しました').then(closeModal);
+}
+
+/* ---------- 案件の追加・編集（工程もまとめて） ---------- */
+function editProject(id){
+  var p=D.projects[id]||{status:'active',color:'#2563eb'};
+  var ts=id?tasksOf(id):[];
+  var clients=vals(D.clients).sort(function(a,b){ return (a.name||'').localeCompare(b.name||'','ja'); });
+  var clientOpts='<option value="">— 選択 —</option>'+clients.map(function(c){ return '<option value="'+c.id+'"'+(c.id===p.clientId?' selected':'')+'>'+esc(c.name)+'</option>'; }).join('')+
+    '<option value="__manual__"'+(!p.clientId&&p.client?' selected':'')+'>その他（手入力）</option>';
+  openModal('<h3>'+(id?'案件を編集':'新規案件')+'</h3><div class="f">'+
+    '<label class="full">工事名 *<input id="p-name" value="'+esc(p.name)+'"></label>'+
+    '<label>発注者<select id="p-client" onchange="$(\'#p-client-m\').classList.toggle(\'hidden\',this.value!==\'__manual__\')">'+clientOpts+'</select>'+
+      '<input id="p-client-m" class="'+(!p.clientId&&p.client?'':'hidden')+'" placeholder="発注者名" value="'+esc(p.clientId?'':p.client)+'" style="margin-top:4px"></label>'+
+    '<label>担当者<input id="p-assignee" list="staff-list" value="'+esc(p.assignee)+'"></label>'+
+    '<label class="full">所在地<input id="p-location" value="'+esc(p.location)+'"></label>'+
+    '<label>開始日<input id="p-start" type="date" value="'+esc(p.startDate)+'"></label>'+
+    '<label>終了日<input id="p-end" type="date" value="'+esc(p.endDate)+'"></label>'+
+    '<label>工事区分<select id="p-cat"><option value="">— 選択 —</option>'+CATEGORIES.map(function(c){ return '<option'+(c===p.category?' selected':'')+'>'+c+'</option>'; }).join('')+'</select></label>'+
+    '<label>ステータス<select id="p-status">'+Object.keys(STATUS).map(function(k){ return '<option value="'+k+'"'+(k===p.status?' selected':'')+'>'+STATUS[k]+'</option>'; }).join('')+'</select></label>'+
+    '<label>色<input id="p-color" type="color" value="'+esc(p.color||'#2563eb')+'"></label>'+
+    '</div><h4 style="margin:16px 0 6px">工程</h4><div id="trows">'+ts.map(taskRow).join('')+'</div>'+
+    '<button class="btn small" onclick="addTaskRow()">＋ 工程を追加</button>'+
+    '<datalist id="staff-list">'+STAFF.map(function(s){return '<option value="'+s+'">';}).join('')+'</datalist>'+
+    '<datalist id="task-list">'+TASK_NAMES.map(function(s){return '<option value="'+s+'">';}).join('')+'</datalist>'+
+    '<div class="foot">'+(id?'<button class="btn danger left" onclick="deleteProject(\''+id+'\')">削除</button>':'')+
+    '<button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="saveProject(\''+(id||'')+'\')">保存</button></div>');
+  if (!id) addTaskRow();
+}
+function taskRow(t){
+  t=t||{};
+  return '<div class="trow" data-id="'+esc(t.id||'')+'">'+
+    '<input class="tn" list="task-list" placeholder="工程名" value="'+esc(t.name)+'">'+
+    '<input class="ts" list="staff-list" placeholder="担当" value="'+esc(t.supervisor)+'">'+
+    '<input class="ta" type="date" value="'+esc(t.startDate)+'">'+
+    '<input class="tb" type="date" value="'+esc(t.endDate)+'">'+
+    '<button class="btn small" title="削除" onclick="this.parentNode.remove()">✕</button></div>';
+}
+function addTaskRow(){ $('#trows').insertAdjacentHTML('beforeend', taskRow()); }
+
+function saveProject(id){
+  var name=$('#p-name').value.trim(); if(!name) return toast('工事名を入力してください', true);
+  var isNew=!id; id=id||newId('p');
+  var sel=$('#p-client').value, manual=sel==='__manual__';
+  var client = manual ? $('#p-client-m').value.trim() : (D.clients[sel]?D.clients[sel].name:'');
+  var P='projects/'+id+'/', u={};
+  // 項目単位で書き込む → フォームに無い項目（旧データの付加情報）は消えない
+  u[P+'id']=id; u[P+'name']=name; u[P+'clientId']=manual?'':sel; u[P+'client']=client; u[P+'clientManual']=manual;
+  u[P+'assignee']=$('#p-assignee').value.trim(); u[P+'location']=$('#p-location').value.trim();
+  u[P+'startDate']=$('#p-start').value; u[P+'endDate']=$('#p-end').value;
+  u[P+'category']=$('#p-cat').value; u[P+'status']=$('#p-status').value; u[P+'color']=$('#p-color').value;
+  if (isNew) u[P+'createdAt']=firebase.database.ServerValue.TIMESTAMP;
+  var keep={}, bad=false;
+  document.querySelectorAll('#trows .trow').forEach(function(r){
+    var tn=r.querySelector('.tn').value.trim(); if(!tn) return;
+    var a=r.querySelector('.ta').value, b=r.querySelector('.tb').value||a;
+    if (a && b && b<a) bad=true;
+    var tid=r.dataset.id||newId('t'); keep[tid]=1; var T='tasks/'+tid+'/';
+    u[T+'id']=tid; u[T+'projectId']=id; u[T+'name']=tn; u[T+'supervisor']=r.querySelector('.ts').value.trim();
+    u[T+'startDate']=a; u[T+'endDate']=b;
+    if (!r.dataset.id){ u[T+'status']='pending'; u[T+'progress']=0; u[T+'note']=''; }
+  });
+  if (bad) return toast('終了日が開始日より前の工程があります', true);
+  // フォームから消した工程を削除
+  if (!isNew) tasksOf(id).forEach(function(t){ if(!keep[t.id]) u['tasks/'+t.id]=null; });
+  save(u, isNew?'追加しました':'更新しました').then(closeModal);
+}
+function deleteProject(id){
+  var p=D.projects[id];
+  if(!confirm('「'+p.name+'」と工程をすべて削除します。元に戻せません。\n（工事が終わった場合は「完了」を使ってください）')) return;
+  var u={}; u['projects/'+id]=null; tasksOf(id).forEach(function(t){ u['tasks/'+t.id]=null; });
+  save(u,'削除しました').then(closeModal);
+}
+
+/* ---------- 工程を1件だけ編集 ---------- */
+function editTask(tid, pid){
+  var t=D.tasks[tid]||{projectId:pid};
+  openModal('<h3>'+(tid?'工程を編集':'工程を追加')+'</h3><div class="f">'+
+    '<label class="full">工程名<input id="t-name" list="task-list" value="'+esc(t.name)+'"></label>'+
+    '<label>担当<input id="t-sup" list="staff-list" value="'+esc(t.supervisor)+'"></label><label></label>'+
+    '<label>開始日<input id="t-start" type="date" value="'+esc(t.startDate)+'"></label>'+
+    '<label>終了日<input id="t-end" type="date" value="'+esc(t.endDate)+'"></label>'+
+    '<label class="full">メモ<textarea id="t-note" rows="2">'+esc(t.note)+'</textarea></label></div>'+
+    '<datalist id="staff-list">'+STAFF.map(function(s){return '<option value="'+s+'">';}).join('')+'</datalist>'+
+    '<datalist id="task-list">'+TASK_NAMES.map(function(s){return '<option value="'+s+'">';}).join('')+'</datalist>'+
+    '<div class="foot">'+(tid?'<button class="btn danger left" onclick="deleteTask(\''+tid+'\')">削除</button>':'')+
+    '<button class="btn" onclick="closeModal()">キャンセル</button><button class="btn primary" onclick="saveTask(\''+(tid||'')+'\',\''+t.projectId+'\')">保存</button></div>');
+}
+function saveTask(tid, pid){
+  var name=$('#t-name').value.trim(); if(!name) return toast('工程名を入力してください', true);
+  var a=$('#t-start').value, b=$('#t-end').value||a;
+  if (a && b<a) return toast('終了日が開始日より前です', true);
+  var isNew=!tid; tid=tid||newId('t'); var T='tasks/'+tid+'/', u={};
+  u[T+'id']=tid; u[T+'projectId']=pid; u[T+'name']=name; u[T+'supervisor']=$('#t-sup').value.trim();
+  u[T+'startDate']=a; u[T+'endDate']=b; u[T+'note']=$('#t-note').value;
+  if (isNew){ u[T+'status']='pending'; u[T+'progress']=0; }
+  save(u,'保存しました').then(closeModal);
+}
+function deleteTask(tid){
+  if(!confirm('この工程を削除しますか？')) return;
+  var u={}; u['tasks/'+tid]=null; save(u,'削除しました').then(closeModal);
+}
+
+/* ---------- 完了・復元 ---------- */
+function completeProject(id){
+  var p=D.projects[id], ts=tasksOf(id);
+  if(!confirm('「'+p.name+'」を完了にして完了履歴へ移しますか？')) return;
+  var ends=ts.map(function(t){return t.endDate;}).filter(Boolean).sort();
+  var doneAt = ends[ends.length-1] || p.endDate || today();
+  if (doneAt>today()) doneAt=today();
+  var a=JSON.parse(JSON.stringify(p));
+  a.status='completed'; a.archivedAt=today(); a.completedAt=doneAt; a.completedMonth=doneAt.slice(0,7);
+  a.tasks=ts; a.taskSummary=ts.map(function(t){ return {name:t.name,startDate:t.startDate||'',endDate:t.endDate||'',status:t.status||'',supervisor:t.supervisor||''}; });
+  var u={}; u['archived/'+id]=a; u['projects/'+id]=null; ts.forEach(function(t){ u['tasks/'+t.id]=null; });
+  save(u,'完了履歴に移しました');
+}
+function restoreProject(id){
+  var a=D.archived[id]; if(!a || !confirm('「'+a.name+'」を進行中に戻しますか？')) return;
+  var p=JSON.parse(JSON.stringify(a)), ts=vals(p.tasks);
+  ['tasks','taskSummary','workerRecords','archivedAt','completedAt','completedMonth','isFromDelete'].forEach(function(k){ delete p[k]; });
+  p.status='active';
+  var u={}; u['projects/'+id]=p; u['archived/'+id]=null;
+  ts.forEach(function(t){ if(t&&t.id){ t.projectId=id; u['tasks/'+t.id]=t; } });
+  save(u,'進行中に戻しました');
+}
+function deleteArchived(id){
+  var a=D.archived[id]; if(!a || !confirm('「'+a.name+'」を完了履歴から削除します。元に戻せません。')) return;
+  var u={}; u['archived/'+id]=null; save(u,'削除しました');
+}
+
+/* ---------- 旧アプリ（data ノード）からの取り込み ---------- */
+function importLegacy(){
+  closeModal();
+  if(!confirm('旧アプリのデータ（案件・工程・発注者・完了履歴）を取り込みます。\n写真・図面・作業員人数などは取り込みません。\n\n新アプリで同じIDのデータは旧データで上書きされます。よろしいですか？')) return;
+  toast('旧データを読み込み中…');
+  db.ref('data').once('value').then(function(snap){
+    var old=snap.val()||{}, u={}, n={projects:0,tasks:0,clients:0,archived:0};
+    function arr(v){ return Array.isArray(v)?v:vals(v); }
+    function clean(o){ return JSON.parse(JSON.stringify(o, function(k,v){ return v===undefined?null:v; })); }
+    arr(old.clients).forEach(function(c){ if(c&&c.id){ u['clients/'+c.id]=clean(c); n.clients++; } });
+    arr(old.projects).forEach(function(p){ if(p&&p.id){ u['projects/'+p.id]=clean(p); n.projects++; } });
+    arr(old.tasks).forEach(function(t){ if(t&&t.id&&t.projectId){ u['tasks/'+t.id]=clean(t); n.tasks++; } });
+    arr(old.archivedProjects).forEach(function(a){ if(a&&a.id){ u['archived/'+a.id]=clean(a); n.archived++; } });
+    if (!Object.keys(u).length) return toast('旧データが見つかりませんでした', true);
+    return save(u).then(function(){
+      toast('取り込み完了：案件'+n.projects+'・工程'+n.tasks+'・発注者'+n.clients+'・完了'+n.archived);
+    });
+  }).catch(function(e){ toast('取り込み失敗：'+(e&&e.message||e), true); });
+}
+
+/* ---------- メニュー・モーダル ---------- */
+function isAdmin(){ return auth.currentUser && auth.currentUser.email===ADMIN_EMAIL; }
+$('#menu-btn').onclick=function(){
+  var u=auth.currentUser;
+  openModal('<h3>メニュー</h3><p class="muted">'+esc(u&&u.email)+'</p>'+
+    (isAdmin()?'<p><button class="btn" onclick="importLegacy()">旧データ取り込み</button><br><span class="muted">旧アプリの案件・工程・発注者・完了履歴をコピーします（何度でも実行可）</span></p>':'')+
+    '<p><a href="../">旧アプリを開く</a></p>'+
+    '<div class="foot"><button class="btn danger left" onclick="auth.signOut();closeModal()">ログアウト</button><button class="btn" onclick="closeModal()">閉じる</button></div>');
+};
+function openModal(html){ $('#sheet').innerHTML=html; $('#modal').classList.remove('hidden'); }
+function closeModal(){ $('#modal').classList.add('hidden'); }
+$('#modal').addEventListener('click', function(e){ if(e.target.id==='modal') closeModal(); });
+
+/* ---------- ログイン ---------- */
+$('#login-btn').onclick=function(){
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){ $('#login-msg').textContent='ログイン失敗：'+e.message; });
+};
+$('#logout-btn2').onclick=function(){ auth.signOut(); };
+var _subscribed=false;
+auth.onAuthStateChanged(function(user){
+  if (!user){
+    $('#login').classList.remove('hidden'); $('#login-btn').classList.remove('hidden'); $('#logout-btn2').classList.add('hidden');
+    $('#login-msg').textContent='Google アカウントでログインしてください';
+    if (_subscribed) location.reload();
+    return;
+  }
+  $('#login').classList.add('hidden');
+  if (!_subscribed){ _subscribed=true; subscribe(); }
+  render();
+});
+</script>
+</body>
+</html>
